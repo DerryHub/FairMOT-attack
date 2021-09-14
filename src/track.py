@@ -63,6 +63,10 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
     timer = Timer()
     results = []
     frame_id = 0
+    root_r = '/home/derry/Data/MOT/'
+    root = '/home/derry/Disk/data/MOT/'
+    imgRoot = os.path.join(root, 'image')
+    noiseRoot = os.path.join(root, 'noise')
     for path, img, img0 in dataloader:
         if frame_id % 20 == 0:
             logger.info('Processing frame {} ({:.2f} fps)'.format(frame_id, 1. / max(1e-5, timer.average_time)))
@@ -70,8 +74,16 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
         # run tracking
         timer.tic()
         blob = torch.from_numpy(img).cuda().unsqueeze(0)
-        # import pdb; pdb.set_trace()
-        online_targets = tracker.update(blob, img0)
+        online_targets, adImg, noise = tracker.update(blob, img0)
+
+        imgPath = os.path.join(imgRoot, path.replace(root_r, ''))
+        os.makedirs(os.path.split(imgPath)[0], exist_ok=True)
+        noisePath = os.path.join(noiseRoot, path.replace(root_r, ''))
+        os.makedirs(os.path.split(noisePath)[0], exist_ok=True)
+
+        cv2.imwrite(imgPath, adImg)
+        cv2.imwrite(noisePath, noise)
+
         online_tlwhs = []
         online_ids = []
         for t in online_targets:
@@ -213,6 +225,7 @@ if __name__ == '__main__':
                       MOT17-10-SDP
                       MOT17-11-SDP
                       MOT17-13-SDP'''
+
         data_root = os.path.join(opt.data_dir, 'MOT17/images/train')
     if opt.val_mot15:
         seqs_str = '''KITTI-13

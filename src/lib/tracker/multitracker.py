@@ -5,6 +5,7 @@
 
 from collections import deque
 
+import cv2
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -226,6 +227,123 @@ class JDETracker(object):
                 results[j] = results[j][keep_inds]
         return results
 
+    @staticmethod
+    def recoverImg(im_blob, img0):
+        height = 608
+        width = 1088
+        im_blob = im_blob.cpu() * 255.0
+        shape = img0.shape[:2]  # shape = [height, width]
+        ratio = min(float(height) / shape[0], float(width) / shape[1])
+        new_shape = (round(shape[1] * ratio), round(shape[0] * ratio))  # new_shape = [width, height]
+        dw = (width - new_shape[0]) / 2  # width padding
+        dh = (height - new_shape[1]) / 2  # height padding
+        top, bottom = round(dh - 0.1), round(dh + 0.1)
+        left, right = round(dw - 0.1), round(dw + 0.1)
+
+        im_blob = im_blob.squeeze().permute(1, 2, 0)[top:height-bottom, left:width-right, :].numpy().astype(np.uint8)
+        im_blob = cv2.cvtColor(im_blob, cv2.COLOR_RGB2BGR)
+
+        h, w, _ = img0.shape
+        im_blob = cv2.resize(im_blob, (w, h))
+
+        return im_blob
+
+    @staticmethod
+    def insert_linear_pos(img_dt, resize, x_scale=None, y_scale=None):
+        m_, n_ = img_dt.shape
+        # 获取新的图像的大小
+        if resize is None:
+            n_new, m_new = np.round(x_scale * n_).astype(int), np.round(y_scale * m_).astype(int)
+        else:
+            n_new, m_new = resize
+
+        n_scale, m_scale = n_ / n_new, m_ / m_new  # src_with/dst_with, Src_height/dst_heaight
+        # 一、获取位置对应的四个点
+        # 1-1- 初始化位置
+        m_indxs = np.repeat(np.arange(m_new), n_new).reshape(m_new, n_new)
+        n_indxs = np.array(list(range(n_new)) * m_new).reshape(m_new, n_new)
+        # 1-2- 初始化位置
+        m_indxs_c = (m_indxs + 0.5) * m_scale - 0.5
+        n_indxs_c = (n_indxs + 0.5) * n_scale - 0.5
+        ### 将小于零的数处理成0
+        m_indxs_c[np.where(m_indxs_c < 0)] = 0.0
+        n_indxs_c[np.where(n_indxs_c < 0)] = 0.0
+
+        # 1-3 获取正方形顶点坐标
+        m_indxs_c_down = m_indxs_c.astype(int)
+        n_indxs_c_down = n_indxs_c.astype(int)
+        m_indxs_c_up = m_indxs_c_down + 1
+        n_indxs_c_up = n_indxs_c_down + 1
+        ### 溢出部分修正
+        m_max = m_ - 1
+        n_max = n_ - 1
+        m_indxs_c_up[np.where(m_indxs_c_up > m_max)] = m_max
+        n_indxs_c_up[np.where(n_indxs_c_up > n_max)] = n_max
+
+        # 1-4 获取正方形四个顶点的位置
+        pos_0_0 = img_dt[m_indxs_c_down, n_indxs_c_down].astype(int)
+        pos_0_1 = img_dt[m_indxs_c_up, n_indxs_c_down].astype(int)
+        pos_1_1 = img_dt[m_indxs_c_up, n_indxs_c_up].astype(int)
+        pos_1_0 = img_dt[m_indxs_c_down, n_indxs_c_up].astype(int)
+        # 1-5 获取浮点位置
+        m, n = np.modf(m_indxs_c)[0], np.modf(n_indxs_c)[0]
+        return pos_0_0, pos_0_1, pos_1_1, pos_1_0, m, n
+
+    def linear_insert_1color(self, img_dt, resize, fx=None, fy=None):
+        pos_0_0, pos_0_1, pos_1_1, pos_1_0, m, n = self.insert_linear_pos(img_dt=img_dt, resize=resize, x_scale=fx,
+                                                                     y_scale=fy)
+        a = (pos_1_0 - pos_0_0)
+        b = (pos_0_1 - pos_0_0)
+        c = pos_1_1 + pos_0_0 - pos_1_0 - pos_0_1
+        return np.round(a * n + b * m + c * n * m + pos_0_0).astype(int)
+
+    def linear_insert(self, img_dt, resize, fx=None, fy=None):
+        # 三个通道分开处理再合并
+        if len(img_dt.shape) == 3:
+            out_img0 = self.linear_insert_1color(img_dt[:, :, 0], resize=resize, fx=fx, fy=fy)
+            out_img1 = self.linear_insert_1color(img_dt[:, :, 1], resize=resize, fx=fx, fy=fy)
+            out_img2 = self.linear_insert_1color(img_dt[:, :, 2], resize=resize, fx=fx, fy=fy)
+            out_img_all = np.c_[out_img0[:, :, np.newaxis], out_img1[:, :, np.newaxis], out_img2[:, :, np.newaxis]]
+        else:
+            out_img_all = self.linear_insert_1color(img_dt, resize=resize, fx=fx, fy=fy)
+        return out_img_all.astype(np.int)
+
+    def recoverNoise(self, noise, img0):
+        height = 608
+        width = 1088
+        noise = noise.cpu() * 255.0
+        shape = img0.shape[:2]  # shape = [height, width]
+        ratio = min(float(height) / shape[0], float(width) / shape[1])
+        new_shape = (round(shape[1] * ratio), round(shape[0] * ratio))  # new_shape = [width, height]
+        dw = (width - new_shape[0]) / 2  # width padding
+        dh = (height - new_shape[1]) / 2  # height padding
+        top, bottom = round(dh - 0.1), round(dh + 0.1)
+        left, right = round(dw - 0.1), round(dw + 0.1)
+
+        noise = noise.squeeze().permute(1, 2, 0)[top:height - bottom, left:width - right, :].numpy().astype(
+            np.int)
+        noise = noise[:, :, ::-1]
+
+        h, w, _ = img0.shape
+        noise = self.linear_insert(noise, (w, h))
+
+        return noise
+
+    def fgsm(self, im_blob, id_feature, dets, epsilon=0.03):
+        ious = bbox_ious(np.ascontiguousarray(dets[:, :4], dtype=np.float),
+                         np.ascontiguousarray(dets[:, :4], dtype=np.float))
+
+        loss = 0
+        for i in range(dets.shape[0]):
+            for j in range(i):
+                if ious[i, j] > 0.3:
+                    loss += torch.mm(id_feature[i:i + 1], id_feature[j:j + 1].T).squeeze()
+        if isinstance(loss, int):
+            return torch.zeros_like(im_blob)
+        loss.backward()
+        noise = im_blob.grad.sign() * epsilon
+        return noise
+
     def update(self, im_blob, img0):
         self.frame_id += 1
         activated_starcks = []
@@ -244,18 +362,20 @@ class JDETracker(object):
                 'out_width': inp_width // self.opt.down_ratio}
 
         ''' Step 1: Network forward, get detections & embeddings'''
-        with torch.no_grad():
-            output = self.model(im_blob)[-1]
-            hm = output['hm'].sigmoid_()
-            wh = output['wh']
-            id_feature = output['id']
-            id_feature = F.normalize(id_feature, dim=1)
+        # with torch.no_grad():
+        im_blob.requires_grad = True
+        self.model.zero_grad()
+        output = self.model(im_blob)[-1]
+        hm = output['hm'].sigmoid_()
+        wh = output['wh']
+        id_feature = output['id']
+        id_feature = F.normalize(id_feature, dim=1)
 
-            reg = output['reg'] if self.opt.reg_offset else None
-            dets, inds = mot_decode(hm, wh, reg=reg, cat_spec_wh=self.opt.cat_spec_wh, K=self.opt.K)
-            id_feature = _tranpose_and_gather_feat(id_feature, inds)
-            id_feature = id_feature.squeeze(0)
-            id_feature = id_feature.cpu().numpy()
+        reg = output['reg'] if self.opt.reg_offset else None
+        dets, inds = mot_decode(hm, wh, reg=reg, cat_spec_wh=self.opt.cat_spec_wh, K=self.opt.K)
+        id_feature = _tranpose_and_gather_feat(id_feature, inds)
+        id_feature = id_feature.squeeze(0)
+        # id_feature = id_feature.detach().cpu().numpy()
 
         dets = self.post_process(dets, meta)
         dets = self.merge_outputs([dets])[1]
@@ -264,9 +384,16 @@ class JDETracker(object):
         dets = dets[remain_inds]
         id_feature = id_feature[remain_inds]
 
-        ious = bbox_ious(np.ascontiguousarray(dets[:, :4], dtype=np.float),
-                         np.ascontiguousarray(dets[:, :4], dtype=np.float))
-        import pdb; pdb.set_trace()
+        noise = self.fgsm(im_blob, id_feature, dets)
+
+        noise = self.recoverNoise(noise, img0)
+
+        id_feature = id_feature.detach().cpu().numpy()
+
+        adImg = np.clip(img0 + noise, a_min=0, a_max=255)
+
+        noise = (noise - np.min(noise)) / (np.max(noise) - np.min(noise))
+        noise = (noise * 255).astype(np.uint8)
 
         # vis
         '''
@@ -383,7 +510,7 @@ class JDETracker(object):
         logger.debug('Lost: {}'.format([track.track_id for track in lost_stracks]))
         logger.debug('Removed: {}'.format([track.track_id for track in removed_stracks]))
 
-        return output_stracks
+        return output_stracks, adImg, noise
 
 
 def joint_stracks(tlista, tlistb):
