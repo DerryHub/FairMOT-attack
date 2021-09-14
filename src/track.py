@@ -74,15 +74,18 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
         # run tracking
         timer.tic()
         blob = torch.from_numpy(img).cuda().unsqueeze(0)
-        online_targets, adImg, noise = tracker.update(blob, img0)
+        if opt.attack:
+            online_targets, adImg, noise = tracker.update_attack(blob, img0)
 
-        imgPath = os.path.join(imgRoot, path.replace(root_r, ''))
-        os.makedirs(os.path.split(imgPath)[0], exist_ok=True)
-        noisePath = os.path.join(noiseRoot, path.replace(root_r, ''))
-        os.makedirs(os.path.split(noisePath)[0], exist_ok=True)
+            imgPath = os.path.join(imgRoot, path.replace(root_r, ''))
+            os.makedirs(os.path.split(imgPath)[0], exist_ok=True)
+            noisePath = os.path.join(noiseRoot, path.replace(root_r, ''))
+            os.makedirs(os.path.split(noisePath)[0], exist_ok=True)
 
-        cv2.imwrite(imgPath, adImg)
-        cv2.imwrite(noisePath, noise)
+            cv2.imwrite(imgPath, adImg)
+            cv2.imwrite(noisePath, noise)
+        else:
+            online_targets = tracker.update(blob, img0)
 
         online_tlwhs = []
         online_ids = []
@@ -154,7 +157,7 @@ def main(opt, data_root='/data/MOT16/train', det_root=None, seqs=('MOT16-05',), 
     # get summary
     metrics = mm.metrics.motchallenge_metrics
     mh = mm.metrics.create()
-    import pdb; pdb.set_trace()
+    # import pdb; pdb.set_trace()
     summary = Evaluator.get_summary(accs, seqs, metrics)
     strsummary = mm.io.render_summary(
         summary,
@@ -218,14 +221,15 @@ if __name__ == '__main__':
                       MOT17-14-SDP'''
         data_root = os.path.join(opt.data_dir, 'MOT17/images/test')
     if opt.val_mot17:
-        seqs_str = '''MOT17-02-SDP
-                      MOT17-04-SDP
-                      MOT17-05-SDP
-                      MOT17-09-SDP
-                      MOT17-10-SDP
-                      MOT17-11-SDP
-                      MOT17-13-SDP'''
-
+        seqs_str = '''MOT17-02-SDP'''
+                      # MOT17-04-SDP
+                      # MOT17-05-SDP
+                      # MOT17-09-SDP
+                      # MOT17-10-SDP
+                      # MOT17-11-SDP
+                      # MOT17-13-SDP'''
+        if not opt.attack:
+            opt.data_dir = '/home/derry/Disk/data/MOT/image'
         data_root = os.path.join(opt.data_dir, 'MOT17/images/train')
     if opt.val_mot15:
         seqs_str = '''KITTI-13
@@ -262,4 +266,4 @@ if __name__ == '__main__':
          exp_name='MOT15_val_all_dla34',
          show_image=False,
          save_images=True,
-         save_videos=True)
+         save_videos=False if opt.attack else True)
