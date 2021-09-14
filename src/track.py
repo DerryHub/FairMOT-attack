@@ -49,8 +49,14 @@ def write_results(filename, results, data_type):
                 f.write(line)
     logger.info('save results to {}'.format(filename))
 
+def show(img, dets):
+    for det in dets:
+        det = det[0]
+        img = cv2.rectangle(img, (int(det[0]), int(det[1])), (int(det[0]+det[2]), int(det[1]+det[3])), color=(255,1,1))
+    return img
 
-def eval_seq(opt, dataloader, data_type, result_filename, save_dir=None, show_image=True, frame_rate=30):
+
+def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None, show_image=True, frame_rate=30):
     if save_dir:
         mkdir_if_missing(save_dir)
     tracker = JDETracker(opt, frame_rate=frame_rate)
@@ -64,6 +70,7 @@ def eval_seq(opt, dataloader, data_type, result_filename, save_dir=None, show_im
         # run tracking
         timer.tic()
         blob = torch.from_numpy(img).cuda().unsqueeze(0)
+        # import pdb; pdb.set_trace()
         online_targets = tracker.update(blob, img0)
         online_tlwhs = []
         online_ids = []
@@ -108,15 +115,19 @@ def main(opt, data_root='/data/MOT16/train', det_root=None, seqs=('MOT16-05',), 
         result_filename = os.path.join(result_root, '{}.txt'.format(seq))
         meta_info = open(os.path.join(data_root, seq, 'seqinfo.ini')).read()
         frame_rate = int(meta_info[meta_info.find('frameRate') + 10:meta_info.find('\nseqLength')])
+        evaluator = Evaluator(data_root, seq, data_type)
+        gt_frame_dict = evaluator.gt_frame_dict
+        gt_ignore_frame_dict = evaluator.gt_ignore_frame_dict
+
         nf, ta, tc = eval_seq(opt, dataloader, data_type, result_filename,
-                              save_dir=output_dir, show_image=show_image, frame_rate=frame_rate)
+                              save_dir=output_dir, show_image=show_image, frame_rate=frame_rate, gt_dict=gt_frame_dict)
         n_frame += nf
         timer_avgs.append(ta)
         timer_calls.append(tc)
 
         # eval
         logger.info('Evaluate seq: {}'.format(seq))
-        evaluator = Evaluator(data_root, seq, data_type)
+
         accs.append(evaluator.eval_file(result_filename))
         if save_videos:
             output_video_path = osp.join(output_dir, '{}.mp4'.format(seq))
@@ -131,6 +142,7 @@ def main(opt, data_root='/data/MOT16/train', det_root=None, seqs=('MOT16-05',), 
     # get summary
     metrics = mm.metrics.motchallenge_metrics
     mh = mm.metrics.create()
+    import pdb; pdb.set_trace()
     summary = Evaluator.get_summary(accs, seqs, metrics)
     strsummary = mm.io.render_summary(
         summary,
@@ -236,5 +248,5 @@ if __name__ == '__main__':
          seqs=seqs,
          exp_name='MOT15_val_all_dla34',
          show_image=False,
-         save_images=False,
-         save_videos=False)
+         save_images=True,
+         save_videos=True)
