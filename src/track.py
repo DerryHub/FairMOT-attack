@@ -221,13 +221,13 @@ if __name__ == '__main__':
                       MOT17-14-SDP'''
         data_root = os.path.join(opt.data_dir, 'MOT17/images/test')
     if opt.val_mot17:
-        seqs_str = '''MOT17-02-SDP'''
-                      # MOT17-04-SDP
-                      # MOT17-05-SDP
-                      # MOT17-09-SDP
-                      # MOT17-10-SDP
-                      # MOT17-11-SDP
-                      # MOT17-13-SDP'''
+        seqs_str = '''MOT17-02-SDP
+                      MOT17-04-SDP
+                      MOT17-05-SDP
+                      MOT17-09-SDP
+                      MOT17-10-SDP
+                      MOT17-11-SDP
+                      MOT17-13-SDP'''
         if not opt.attack:
             opt.data_dir = '/home/derry/Disk/data/MOT/image'
         data_root = os.path.join(opt.data_dir, 'MOT17/images/train')
