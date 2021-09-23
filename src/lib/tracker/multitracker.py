@@ -385,6 +385,26 @@ class JDETracker(object):
         noise = im_blob.grad.sign() * epsilon
         return noise
 
+    # def fgsmV1(self, im_blob, id_features, last_id_features, dets, epsilon=0.03):
+    #     ious = bbox_ious(np.ascontiguousarray(dets[:, :4], dtype=np.float),
+    #                      np.ascontiguousarray(dets[:, :4], dtype=np.float))
+    #
+    #     ious = self.processIoUs(ious)
+    #     loss = 0
+    #     for id_feature in id_features:
+    #         for i in range(dets.shape[0]):
+    #             for j in range(i):
+    #                 if ious[i, j] > 0:
+    #                     loss += torch.mm(id_feature[i:i + 1], id_feature[j:j + 1].T).squeeze()
+    #             if last_id_features[i] is not None:
+    #                 last_id_feature = torch.from_numpy(last_id_features[i]).unsqueeze(0).cuda()
+    #                 loss -= torch.mm(id_feature[i:i + 1], last_id_feature.T).squeeze()
+    #     if isinstance(loss, int):
+    #         return torch.zeros_like(im_blob)
+    #     loss.backward()
+    #     noise = im_blob.grad.sign() * epsilon
+    #     return noise
+
     def fgsmV1(self, im_blob, id_features, last_id_features, dets, epsilon=0.03):
         ious = bbox_ious(np.ascontiguousarray(dets[:, :4], dtype=np.float),
                          np.ascontiguousarray(dets[:, :4], dtype=np.float))
@@ -395,10 +415,13 @@ class JDETracker(object):
             for i in range(dets.shape[0]):
                 for j in range(i):
                     if ious[i, j] > 0:
-                        loss += torch.mm(id_feature[i:i + 1], id_feature[j:j + 1].T).squeeze()
-                if last_id_features[i] is not None:
-                    last_id_feature = torch.from_numpy(last_id_features[i]).unsqueeze(0).cuda()
-                    loss -= torch.mm(id_feature[i:i + 1], last_id_feature.T).squeeze()
+                        if last_id_features[i] is not None:
+                            last_id_feature = torch.from_numpy(last_id_features[i]).unsqueeze(0).cuda()
+                            loss -= torch.mm(id_feature[i:i + 1], last_id_feature.T).squeeze()
+                            loss += torch.mm(id_feature[j:j + 1], last_id_feature.T).squeeze()
+                        else:
+                            loss += torch.mm(id_feature[i:i + 1], id_feature[j:j + 1].T).squeeze()
+
         if isinstance(loss, int):
             return torch.zeros_like(im_blob)
         loss.backward()
@@ -664,9 +687,9 @@ class JDETracker(object):
 
         # noise = self.fgsmV3(im_blob, id_features, last_id_features, last_ad_id_features, dets)
 
-        noise = self.fgsmV2(im_blob, id_features, last_ad_id_features, dets)
+        # noise = self.fgsmV2(im_blob, id_features, last_ad_id_features, dets)
 
-        # noise = self.fgsmV1(im_blob, id_features, last_id_features, dets)
+        noise = self.fgsmV1(im_blob, id_features, last_id_features, dets)
 
         # noise = self.fgsm(im_blob, id_features, dets)
 
