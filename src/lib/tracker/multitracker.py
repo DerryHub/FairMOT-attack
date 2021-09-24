@@ -23,6 +23,23 @@ from cython_bbox import bbox_overlaps as bbox_ious
 
 from .basetrack import BaseTrack, TrackState
 
+seed=0
+
+np.random.seed(seed)
+if torch.cuda.is_available():
+    torch.cuda.manual_seed_all(seed)
+
+torch.manual_seed(seed)
+torch.cuda.manual_seed(seed)
+torch.cuda.manual_seed_all(seed)
+
+# Remove randomness (may be slower on Tesla GPUs)
+# https://pytorch.org/docs/stable/notes/randomness.html
+if seed == 0:
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+smoothL1 = torch.nn.SmoothL1Loss(beta=0.5)
+
 td_ = {}
 class STrack(BaseTrack):
     shared_kalman = KalmanFilter()
@@ -39,6 +56,7 @@ class STrack(BaseTrack):
 
         self.smooth_feat = None
         self.smooth_feat_ad = None
+
         self.update_features(temp_feat)
         self.features = deque([], maxlen=buffer_size)
         self.alpha = 0.9
@@ -457,7 +475,6 @@ class JDETracker(object):
         for id_feature in id_features:
             for i in range(dets.shape[0]):
                 for j in range(i):
-
                     if ious[i, j] > 0:
                         if last_ad_id_features[i] is not None:
                             last_ad_id_feature = torch.from_numpy(last_ad_id_features[i]).unsqueeze(0).cuda()
@@ -472,6 +489,56 @@ class JDETracker(object):
         noise = im_blob.grad.sign() * epsilon
         return noise
 
+    def fgsmV2_(self, im_blob, id_features, last_ad_id_features, dets, outputs_ori, outputs, epsilon=0.03):
+        ious = bbox_ious(np.ascontiguousarray(dets[:, :4], dtype=np.float),
+                         np.ascontiguousarray(dets[:, :4], dtype=np.float))
+
+        ious = self.processIoUs(ious)
+        loss = 0
+        for id_feature in id_features:
+            for i in range(dets.shape[0]):
+                for j in range(i):
+                    if ious[i, j] > 0:
+                        if last_ad_id_features[i] is not None:
+                            last_ad_id_feature = torch.from_numpy(last_ad_id_features[i]).unsqueeze(0).cuda()
+                            loss -= torch.mm(id_feature[i:i + 1], last_ad_id_feature.T).squeeze()
+                            loss += torch.mm(id_feature[j:j + 1], last_ad_id_feature.T).squeeze()
+                        else:
+                            loss += torch.mm(id_feature[i:i + 1], id_feature[j:j + 1].T).squeeze()
+
+        loss_det = 0
+        for key in ['hm', 'wh', 'reg']:
+            loss_det -= smoothL1(outputs[key], outputs_ori[key].data)
+        loss += loss_det
+        if isinstance(loss, int):
+            return torch.zeros_like(im_blob)
+        loss.backward()
+        noise = im_blob.grad.sign() * epsilon
+        return noise
+
+    # def fgsmV3(self, im_blob, id_features, last_id_features, last_ad_id_features, dets, epsilon=0.03):
+    #     ious = bbox_ious(np.ascontiguousarray(dets[:, :4], dtype=np.float),
+    #                      np.ascontiguousarray(dets[:, :4], dtype=np.float))
+    #
+    #     ious = self.processIoUs(ious)
+    #     loss = 0
+    #     for id_feature in id_features:
+    #         for i in range(dets.shape[0]):
+    #             for j in range(i):
+    #                 if ious[i, j] > 0:
+    #                     loss += torch.mm(id_feature[i:i + 1], id_feature[j:j + 1].T).squeeze()
+    #             if last_id_features[i] is not None:
+    #                 last_id_feature = torch.from_numpy(last_id_features[i]).unsqueeze(0).cuda()
+    #                 loss -= torch.mm(id_feature[i:i + 1], last_id_feature.T).squeeze()
+    #             if last_ad_id_features[i] is not None:
+    #                 last_ad_id_feature = torch.from_numpy(last_ad_id_features[i]).unsqueeze(0).cuda()
+    #                 loss -= torch.mm(id_feature[i:i + 1], last_ad_id_feature.T).squeeze()
+    #     if isinstance(loss, int):
+    #         return torch.zeros_like(im_blob)
+    #     loss.backward()
+    #     noise = im_blob.grad.sign() * epsilon
+    #     return noise
+
     def fgsmV3(self, im_blob, id_features, last_id_features, last_ad_id_features, dets, epsilon=0.03):
         ious = bbox_ious(np.ascontiguousarray(dets[:, :4], dtype=np.float),
                          np.ascontiguousarray(dets[:, :4], dtype=np.float))
@@ -482,18 +549,48 @@ class JDETracker(object):
             for i in range(dets.shape[0]):
                 for j in range(i):
                     if ious[i, j] > 0:
-                        loss += torch.mm(id_feature[i:i + 1], id_feature[j:j + 1].T).squeeze()
-                if last_id_features[i] is not None:
-                    last_id_feature = torch.from_numpy(last_id_features[i]).unsqueeze(0).cuda()
-                    loss -= torch.mm(id_feature[i:i + 1], last_id_feature.T).squeeze()
-                if last_ad_id_features[i] is not None:
-                    last_ad_id_feature = torch.from_numpy(last_ad_id_features[i]).unsqueeze(0).cuda()
-                    loss -= torch.mm(id_feature[i:i + 1], last_ad_id_feature.T).squeeze()
+                        if last_id_features[i] is not None:
+                            last_id_feature = torch.from_numpy(last_id_features[i]).unsqueeze(0).cuda()
+                            loss -= torch.mm(id_feature[i:i + 1], last_id_feature.T).squeeze()
+                            loss += torch.mm(id_feature[j:j + 1], last_id_feature.T).squeeze()
+                        if last_ad_id_features[i] is not None:
+                            last_ad_id_feature = torch.from_numpy(last_ad_id_features[i]).unsqueeze(0).cuda()
+                            loss -= torch.mm(id_feature[i:i + 1], last_ad_id_feature.T).squeeze()
+                            loss += torch.mm(id_feature[j:j + 1], last_ad_id_feature.T).squeeze()
+                        if last_id_features[i] is None and last_ad_id_features[i] is None:
+                            loss += torch.mm(id_feature[i:i + 1], id_feature[j:j + 1].T).squeeze()
+
         if isinstance(loss, int):
             return torch.zeros_like(im_blob)
         loss.backward()
         noise = im_blob.grad.sign() * epsilon
         return noise
+
+    def ifgsmV2(self, im_blob, id_features, last_ad_id_features, dets, inds, remain_inds, outputs_ori, epsilon=0.03, alpha=0.003):
+        noise = self.fgsmV2(im_blob, id_features, last_ad_id_features, dets, epsilon=alpha)
+        num = int(epsilon / alpha)
+        for i in range(num):
+            im_blob_ad = torch.clip(im_blob + noise, min=0, max=1).data
+            id_features, outputs = self.forwardFeature(im_blob_ad, inds, remain_inds)
+            noise += self.fgsmV2_(im_blob_ad, id_features, last_ad_id_features, dets, outputs_ori, outputs, epsilon=alpha)
+        return noise
+
+
+    def forwardFeature(self, im_blob, inds, remain_inds):
+        im_blob.requires_grad = True
+        self.model.zero_grad()
+        output = self.model(im_blob)[-1]
+        id_feature = output['id']
+        id_feature = F.normalize(id_feature, dim=1)
+        id_features = []
+        for i in range(3):
+            for j in range(3):
+                id_feature_exp = _tranpose_and_gather_feat_expand(id_feature, inds, bias=(i - 1, j - 1)).squeeze(0)
+                id_features.append(id_feature_exp)
+        for i in range(len(id_features)):
+            id_features[i] = id_features[i][remain_inds]
+        return id_features, output
+
 
     def update_attack(self, im_blob, img0):
         self.frame_id += 1
@@ -689,9 +786,11 @@ class JDETracker(object):
 
         # noise = self.fgsmV2(im_blob, id_features, last_ad_id_features, dets)
 
-        noise = self.fgsmV1(im_blob, id_features, last_id_features, dets)
+        # noise = self.fgsmV1(im_blob, id_features, last_id_features, dets)
 
         # noise = self.fgsm(im_blob, id_features, dets)
+
+        noise = self.ifgsmV2(im_blob, id_features, last_ad_id_features, dets, inds, remain_inds, outputs_ori=output)
 
         im_blob = torch.clip(im_blob+noise, min=0, max=1)
         self.update_ad(im_blob, img0, dets_raw, inds, tracks_ad)
@@ -780,7 +879,7 @@ class JDETracker(object):
         id_feature = id_feature[remain_inds]
 
         td = {}
-
+        dbg = True
 
         # vis
         '''
@@ -823,10 +922,11 @@ class JDETracker(object):
         for itracked, idet in matches:
             track = strack_pool[itracked]
             det = detections[idet]
-            td[track.track_id] = det.tlwh
-            if track.track_id not in td_:
-                td_[track.track_id] = [None for i in range(50)]
-            td_[track.track_id][self.frame_id] = det.smooth_feat
+            if dbg:
+                td[track.track_id] = det.tlwh
+                if track.track_id not in td_:
+                    td_[track.track_id] = [None for i in range(50)]
+                td_[track.track_id][self.frame_id] = (track.smooth_feat, det.smooth_feat)
             if track.state == TrackState.Tracked:
                 track.update(detections[idet], self.frame_id)
                 activated_starcks.append(track)
@@ -843,10 +943,11 @@ class JDETracker(object):
         for itracked, idet in matches:
             track = r_tracked_stracks[itracked]
             det = detections[idet]
-            td[track.track_id] = det.tlwh
-            if track.track_id not in td_:
-                td_[track.track_id] = [None for i in range(50)]
-            td_[track.track_id][self.frame_id] = det.smooth_feat
+            if dbg:
+                td[track.track_id] = det.tlwh
+                if track.track_id not in td_:
+                    td_[track.track_id] = [None for i in range(50)]
+                td_[track.track_id][self.frame_id] = (track.smooth_feat, det.smooth_feat)
             if track.state == TrackState.Tracked:
                 track.update(det, self.frame_id)
                 activated_starcks.append(track)
@@ -865,10 +966,11 @@ class JDETracker(object):
         dists = matching.iou_distance(unconfirmed, detections)
         matches, u_unconfirmed, u_detection = matching.linear_assignment(dists, thresh=0.7)
         for itracked, idet in matches:
-            td[unconfirmed[itracked].track_id] = detections[idet].tlwh
-            if unconfirmed[itracked].track_id not in td_:
-                td_[unconfirmed[itracked].track_id] = [None for i in range(50)]
-            td_[unconfirmed[itracked].track_id][self.frame_id] = detections[idet].smooth_feat
+            if dbg:
+                td[unconfirmed[itracked].track_id] = detections[idet].tlwh
+                if unconfirmed[itracked].track_id not in td_:
+                    td_[unconfirmed[itracked].track_id] = [None for i in range(50)]
+                td_[unconfirmed[itracked].track_id][self.frame_id] = (unconfirmed[itracked].smooth_feat, detections[idet].smooth_feat)
             unconfirmed[itracked].update(detections[idet], self.frame_id)
             activated_starcks.append(unconfirmed[itracked])
         for it in u_unconfirmed:
@@ -902,25 +1004,26 @@ class JDETracker(object):
         # get scores of lost tracks
         output_stracks = [track for track in self.tracked_stracks if track.is_activated]
 
-        f_1 = []
-        f_2 = []
-        fi = 2
-        fj = 4
-        if self.frame_id == 25:
-            for i in range(20):
-                if td_[fi][i] is None or td_[fi][i+1] is None or td_[fj][i+1] is None:
-                    continue
-                f_1.append(td_[fi][i] @ td_[fi][i+1])
-                f_2.append(td_[fi][i]@td_[fj][i+1])
-            f1 = sum(f_1) / len(f_1)
-            f2 = sum(f_2) / len(f_2)
+        if dbg:
+            f_1 = []
+            f_2 = []
+            fi = 1
+            fj = 2
+            if self.frame_id == 25:
+                for i in range(20):
+                    if td_[fi][i] is None or td_[fj][i] is None:
+                        continue
+                    f_1.append(td_[fi][i][0] @ td_[fi][i][1])
+                    f_2.append(td_[fi][i][0]@td_[fj][i][1])
+                f1 = sum(f_1) / len(f_1)
+                f2 = sum(f_2) / len(f_2)
 
-            sc = 0
-            for i in range(len(f_1)):
-                if f_2[i] > f_1[i]:
-                    sc += 1
-            print(f'f1:{f1}, f2:{f2}, sc:{sc}, len:{len(f_1)}')
-            import pdb; pdb.set_trace()
+                sc = 0
+                for i in range(len(f_1)):
+                    if f_2[i] > f_1[i]:
+                        sc += 1
+                print(f'f1:{f1}, f2:{f2}, sc:{sc}, len:{len(f_1)}')
+                import pdb; pdb.set_trace()
 
         logger.debug('===========Frame {}=========='.format(self.frame_id))
         logger.debug('Activated: {}'.format([track.track_id for track in activated_starcks]))
