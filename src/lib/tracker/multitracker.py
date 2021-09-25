@@ -928,7 +928,7 @@ class JDETracker(object):
         output_stracks = self.update(im_blob, img0, **kwargs)
 
         noise = self.recoverNoise(noise, img0)
-
+        # import pdb; pdb.set_trace()
         adImg = np.clip(img0 + noise, a_min=0, a_max=255)
 
         noise = (noise - np.min(noise)) / (np.max(noise) - np.min(noise))

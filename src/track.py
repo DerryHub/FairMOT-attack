@@ -100,11 +100,16 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
         # save results
         results.append((frame_id + 1, online_tlwhs, online_ids))
         if show_image or save_dir is not None:
+            if opt.attack:
+                img0 = adImg.astype(np.uint8)
             online_im = vis.plot_tracking(img0, online_tlwhs, online_ids, frame_id=frame_id,
                                           fps=1. / timer.average_time)
         if show_image:
             cv2.imshow('online_im', online_im)
         if save_dir is not None:
+            if opt.attack:
+                save_dir = os.path.join(imgRoot, save_dir.replace(root_r, ''))
+                os.makedirs(save_dir, exist_ok=True)
             cv2.imwrite(os.path.join(save_dir, '{:05d}.jpg'.format(frame_id)), online_im)
         frame_id += 1
     # save results
@@ -228,8 +233,8 @@ if __name__ == '__main__':
                       MOT17-10-SDP
                       MOT17-11-SDP
                       MOT17-13-SDP'''
-        if not opt.attack:
-            opt.data_dir = '/home/derry/Disk/data/MOT/image'
+        # if not opt.attack:
+        #     opt.data_dir = '/home/derry/Disk/data/MOT/image'
         # opt.data_dir = '/home/derry/Disk/data/MOT_v3/image'
         data_root = os.path.join(opt.data_dir, 'MOT17/images/train')
     if opt.val_mot15:
