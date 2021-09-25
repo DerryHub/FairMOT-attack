@@ -16,6 +16,7 @@ class TrackState(object):
 
 class BaseTrack(object):
     _count = 0
+    _count_ = 0
 
     track_id = 0
     is_activated = False
@@ -40,6 +41,11 @@ class BaseTrack(object):
     def next_id():
         BaseTrack._count += 1
         return BaseTrack._count
+
+    @staticmethod
+    def next_id_():
+        BaseTrack._count_ += 1
+        return BaseTrack._count_
 
     def activate(self, *args):
         raise NotImplementedError

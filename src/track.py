@@ -75,7 +75,7 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
         timer.tic()
         blob = torch.from_numpy(img).cuda().unsqueeze(0)
         if opt.attack:
-            online_targets, adImg, noise = tracker.update_attack(blob, img0)
+            online_targets, adImg, noise = tracker.update_attack(blob, img0, name=path.replace(root_r, ''))
 
             imgPath = os.path.join(imgRoot, path.replace(root_r, ''))
             os.makedirs(os.path.split(imgPath)[0], exist_ok=True)
@@ -85,7 +85,7 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
             cv2.imwrite(imgPath, adImg)
             cv2.imwrite(noisePath, noise)
         else:
-            online_targets = tracker.update(blob, img0)
+            online_targets = tracker.update(blob, img0, name=path.replace(root_r, ''))
 
         online_tlwhs = []
         online_ids = []
@@ -267,4 +267,4 @@ if __name__ == '__main__':
          exp_name='MOT15_val_all_dla34',
          show_image=False,
          save_images=True,
-         save_videos=False if opt.attack else True)
+         save_videos=True if opt.attack else True)
