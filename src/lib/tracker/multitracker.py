@@ -595,8 +595,11 @@ class JDETracker(object):
                             last_ad_id_feature = torch.from_numpy(last_ad_id_features[i]).unsqueeze(0).cuda()
                             loss -= torch.mm(id_feature[i:i + 1], last_ad_id_feature.T).squeeze()
                             loss += torch.mm(id_feature[j:j + 1], last_ad_id_feature.T).squeeze()
-                            # import pdb; pdb.set_trace()
-                        else:
+                        if last_ad_id_features[j] is not None:
+                            last_ad_id_feature = torch.from_numpy(last_ad_id_features[j]).unsqueeze(0).cuda()
+                            loss -= torch.mm(id_feature[j:j + 1], last_ad_id_feature.T).squeeze()
+                            loss += torch.mm(id_feature[i:i + 1], last_ad_id_feature.T).squeeze()
+                        if last_ad_id_features[i] is None and last_ad_id_features[j] is None:
                             loss += torch.mm(id_feature[i:i + 1], id_feature[j:j + 1].T).squeeze()
 
         if isinstance(loss, int):
@@ -620,7 +623,11 @@ class JDETracker(object):
                             last_ad_id_feature = torch.from_numpy(last_ad_id_features[i]).unsqueeze(0).cuda()
                             loss -= torch.mm(id_feature[i:i + 1], last_ad_id_feature.T).squeeze()
                             loss += torch.mm(id_feature[j:j + 1], last_ad_id_feature.T).squeeze()
-                        else:
+                        if last_ad_id_features[j] is not None:
+                            last_ad_id_feature = torch.from_numpy(last_ad_id_features[j]).unsqueeze(0).cuda()
+                            loss -= torch.mm(id_feature[j:j + 1], last_ad_id_feature.T).squeeze()
+                            loss += torch.mm(id_feature[i:i + 1], last_ad_id_feature.T).squeeze()
+                        if last_ad_id_features[i] is None and last_ad_id_features[j] is None:
                             loss += torch.mm(id_feature[i:i + 1], id_feature[j:j + 1].T).squeeze()
 
         loss_det = 0
