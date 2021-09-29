@@ -605,8 +605,9 @@ class JDETracker(object):
         if isinstance(loss, int):
             return torch.zeros_like(im_blob)
         loss.backward()
-        noise = im_blob.grad.sign() * epsilon
-        noise = gaussianBlurConv(noise)
+        grad = im_blob.grad
+        noise = grad.sign() * epsilon
+        # noise = gaussianBlurConv(noise)
         return noise
 
     def fgsmV2_(self, im_blob, id_features, last_ad_id_features, dets, outputs_ori, outputs, epsilon=0.03):
@@ -631,15 +632,15 @@ class JDETracker(object):
                             loss += torch.mm(id_feature[i:i + 1], id_feature[j:j + 1].T).squeeze()
 
         loss_det = 0
-        loss_det -= mse(outputs['hm'], outputs_ori['hm'].data)
-        for key in ['wh', 'reg']:
+        for key in ['hm', 'wh', 'reg']:
             loss_det -= smoothL1(outputs[key], outputs_ori[key].data)
         loss += loss_det
         if isinstance(loss, int):
             return torch.zeros_like(im_blob)
         loss.backward()
-        noise = im_blob.grad.sign() * epsilon
-        noise = gaussianBlurConv(noise)
+        grad = im_blob.grad
+        noise = grad.sign() * epsilon
+        # noise = gaussianBlurConv(noise)
         return noise
 
     # def fgsmV3(self, im_blob, id_features, last_id_features, last_ad_id_features, dets, epsilon=0.03):
@@ -740,7 +741,7 @@ class JDETracker(object):
         im_blob.requires_grad = True
         self.model.zero_grad()
         output = self.model(im_blob)[-1]
-        hm = output['hm'].sigmoid_()
+        hm = output['hm'].sigmoid()
         wh = output['wh']
         id_feature = output['id']
         id_feature = F.normalize(id_feature, dim=1)
