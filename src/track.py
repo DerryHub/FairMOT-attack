@@ -157,7 +157,7 @@ def main(opt, data_root='/data/MOT16/train', det_root=None, seqs=('MOT16-05',), 
                 root_r += '/' if root_r[-1] != '/' else ''
                 root = opt.output_dir
                 root += '/' if root[-1] != '/' else ''
-                output_dir = output_dir.replace(root_r, root)
+                output_dir = output_dir.replace(root_r, os.path.join(root, 'image/'))
             output_video_path = osp.join(output_dir, '{}.mp4'.format(seq))
             cmd_str = 'ffmpeg -f image2 -i {}/%05d.jpg -c:v copy {}'.format(output_dir, output_video_path)
             os.system(cmd_str)
@@ -234,29 +234,29 @@ if __name__ == '__main__':
                       MOT17-14-SDP'''
         data_root = os.path.join(opt.data_dir, 'MOT17/images/test')
     if opt.val_mot17:
-        seqs_str = '''MOT17-02-SDP'''
-                      # MOT17-04-SDP
-                      # MOT17-05-SDP
-                      # MOT17-09-SDP
-                      # MOT17-10-SDP
-                      # MOT17-11-SDP
-                      # MOT17-13-SDP'''
+        seqs_str = '''MOT17-02-SDP
+                      MOT17-04-SDP
+                      MOT17-05-SDP
+                      MOT17-09-SDP
+                      MOT17-10-SDP
+                      MOT17-11-SDP
+                      MOT17-13-SDP'''
         # if not opt.attack:
         #     opt.data_dir = '/home/derry/Disk/data/MOT/image'
         # opt.data_dir = '/home/derry/Disk/data/MOT_v3/image'
         data_root = os.path.join(opt.data_dir, 'MOT17/images/train')
     if opt.val_mot15:
-        seqs_str = '''KITTI-13'''
-                      # KITTI-17
-                      # ETH-Bahnhof
-                      # ETH-Sunnyday
-                      # PETS09-S2L1
-                      # TUD-Campus
-                      # TUD-Stadtmitte
-                      # ADL-Rundle-6
-                      # ADL-Rundle-8
-                      # ETH-Pedcross2
-                      # TUD-Stadtmitte'''
+        seqs_str = '''KITTI-13
+                      KITTI-17
+                      ETH-Bahnhof
+                      ETH-Sunnyday
+                      PETS09-S2L1
+                      TUD-Campus
+                      TUD-Stadtmitte
+                      ADL-Rundle-6
+                      ADL-Rundle-8
+                      ETH-Pedcross2
+                      TUD-Stadtmitte'''
         data_root = os.path.join(opt.data_dir, 'MOT15/images/train')
     if opt.val_mot20:
         seqs_str = '''MOT20-01
