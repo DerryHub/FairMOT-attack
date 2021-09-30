@@ -134,7 +134,7 @@ class STrack(BaseTrack):
 
         self.tracklet_len = 0
         self.state = TrackState.Tracked
-        #self.is_activated = True
+        self.is_activated = True
         self.frame_id = frame_id
         self.start_frame = frame_id
 
@@ -146,7 +146,7 @@ class STrack(BaseTrack):
 
         self.tracklet_len = 0
         self.state = TrackState.Tracked
-        #self.is_activated = True
+        self.is_activated = True
         self.frame_id = frame_id
         self.start_frame = frame_id
 
@@ -901,6 +901,7 @@ class JDETracker(object):
         self.removed_stracks_.extend(removed_stracks)
         self.tracked_stracks_, self.lost_stracks_ = remove_duplicate_stracks(self.tracked_stracks_, self.lost_stracks_)
         # get scores of lost tracks
+        import pdb; pdb.set_trace()
         output_stracks_ori = [track for track in self.tracked_stracks_ if track.is_activated]
 
         logger.debug('===========Frame {}=========='.format(self.frame_id_))

@@ -28,6 +28,43 @@ from tracking_utils.utils import mkdir_if_missing
 from opts import opts
 
 
+class TrackObject:
+    def __init__(self, result_lines, id):
+        self.dic = {}
+        self.id = id
+        self.frames = []
+        for line in result_lines:
+            line = list(map(float, line.strip().split(',')))
+            if int(line[1]) != id:
+                continue
+            assert int(line[0]) not in self.dic
+            self.frames.append(int(line[0]))
+            self.dic[int(line[0])] = {
+                'xywh': np.array(line[2:6]),
+                'match': None
+            }
+
+    def getXYWH(self, frame_id):
+        if frame_id not in self.dic:
+            return None
+        return self.dic[frame_id]['xywh']
+
+    def updateMatch(self, frame_id, track):
+        assert frame_id in self.dic and self.dic[frame_id]['match'] is None
+        self.dic[frame_id]['match'] = track
+
+    def __repr__(self):
+        s = ''
+        for frame_id in self.frames:
+            if self.dic[frame_id]['match'] is None:
+                s += f"frame_id: {frame_id}, xywh: {self.dic[frame_id]['xywh']}, match_id: -1\n"
+            else:
+                s += f"frame_id: {frame_id}, xywh: {self.dic[frame_id]['xywh']}, " \
+                     f"match_id: {self.dic[frame_id]['match'].id}\n"
+        return s
+
+
+
 def write_results(filename, results, data_type):
     if data_type == 'mot':
         save_format = '{frame},{id},{x1},{y1},{w},{h},1,-1,-1,-1\n'
@@ -56,8 +93,24 @@ def show(img, dets):
     return img
 
 
+def decodeResult(result_filename):
+    with open(result_filename, 'r') as f:
+        lines = f.readlines()
+    ids = set([])
+    for line in lines:
+        line = list(map(float, line.strip().split(',')))
+        ids.add(int(line[1]))
+    tracks = []
+    for id in ids:
+        tracks.append(TrackObject(lines, id))
+    return tracks
+
+
 def evaluate_attack(result_filename_ori, result_filename_att):
-    pass
+    ori_tracks = decodeResult(result_filename_ori)
+    att_tracks = decodeResult(result_filename_att)
+    import pdb; pdb.set_trace()
+
 
 def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None, show_image=True, frame_rate=30):
     if save_dir:
@@ -80,9 +133,11 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
         # run tracking
         timer.tic()
         blob = torch.from_numpy(img).cuda().unsqueeze(0)
+
         if opt.attack:
             online_targets_ori, output_stracks_att, adImg, noise = tracker.update_attack(blob, img0, name=path.replace(root_r, ''))
-
+            import pdb;
+            pdb.set_trace()
             imgPath = os.path.join(imgRoot, path.replace(root_r, ''))
             os.makedirs(os.path.split(imgPath)[0], exist_ok=True)
             noisePath = os.path.join(noiseRoot, path.replace(root_r, ''))
@@ -143,9 +198,14 @@ def main(opt, data_root='/data/MOT16/train', det_root=None, seqs=('MOT16-05',), 
     root_r += '/' if root_r[-1] != '/' else ''
     root = opt.output_dir
     root += '/' if root[-1] != '/' else ''
-    result_root = os.path.join(opt.output_dir, 'results', exp_name)
+    if opt.attack:
+        result_root = os.path.join(opt.output_dir, 'results', exp_name)
+    else:
+        result_root = os.path.join(data_root, '../results', exp_name)
     mkdir_if_missing(result_root)
     data_type = 'mot'
+
+
 
     # run tracking
     accs = []
@@ -163,6 +223,9 @@ def main(opt, data_root='/data/MOT16/train', det_root=None, seqs=('MOT16-05',), 
         gt_frame_dict = evaluator.gt_frame_dict
         gt_ignore_frame_dict = evaluator.gt_ignore_frame_dict
 
+        # evaluate_attack(result_filename, result_filename.replace('.txt', '_attack.txt'))
+        # import pdb; pdb.set_trace()
+
         nf, ta, tc = eval_seq(opt, dataloader, data_type, result_filename,
                               save_dir=output_dir, show_image=show_image, frame_rate=frame_rate, gt_dict=gt_frame_dict)
         n_frame += nf
@@ -173,7 +236,8 @@ def main(opt, data_root='/data/MOT16/train', det_root=None, seqs=('MOT16-05',), 
         logger.info('Evaluate seq: {}'.format(seq))
 
         accs.append(evaluator.eval_file(result_filename))
-        accs_att.append(evaluator.eval_file(result_filename.replace('.txt', '_attack.txt')))
+        if opt.attack:
+            accs_att.append(evaluator.eval_file(result_filename.replace('.txt', '_attack.txt')))
         if save_videos:
             if opt.attack:
                 output_dir = output_dir.replace(root_r, os.path.join(root, 'image/'))
@@ -191,23 +255,24 @@ def main(opt, data_root='/data/MOT16/train', det_root=None, seqs=('MOT16-05',), 
     mh = mm.metrics.create()
     # import pdb; pdb.set_trace()
     summary = Evaluator.get_summary(accs, seqs, metrics)
-    summary_att = Evaluator.get_summary(accs_att, seqs, metrics)
     strsummary = mm.io.render_summary(
         summary,
         formatters=mh.formatters,
         namemap=mm.io.motchallenge_metric_names
     )
-    strsummary_att = mm.io.render_summary(
-        summary_att,
-        formatters=mh.formatters,
-        namemap=mm.io.motchallenge_metric_names
-    )
     print('=' * 50 + 'origin' + '=' * 50)
     print(strsummary)
-    print('=' * 50 + 'attack' + '=' * 50)
-    print(strsummary_att)
     Evaluator.save_summary(summary, os.path.join(result_root, 'summary_{}.xlsx'.format(exp_name)))
-    Evaluator.save_summary(summary_att, os.path.join(result_root, 'summary_{}_attack.xlsx'.format(exp_name)))
+    if opt.attack:
+        summary_att = Evaluator.get_summary(accs_att, seqs, metrics)
+        strsummary_att = mm.io.render_summary(
+            summary_att,
+            formatters=mh.formatters,
+            namemap=mm.io.motchallenge_metric_names
+        )
+        print('=' * 50 + 'attack' + '=' * 50)
+        print(strsummary_att)
+        Evaluator.save_summary(summary_att, os.path.join(result_root, 'summary_{}_attack.xlsx'.format(exp_name)))
 
 
 if __name__ == '__main__':
