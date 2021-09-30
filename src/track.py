@@ -56,12 +56,16 @@ def show(img, dets):
     return img
 
 
+def evaluate_attack(result_filename_ori, result_filename_att):
+    pass
+
 def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None, show_image=True, frame_rate=30):
     if save_dir:
         mkdir_if_missing(save_dir)
     tracker = JDETracker(opt, frame_rate=frame_rate)
     timer = Timer()
     results = []
+    results_att = []
     frame_id = 0
     root_r = opt.data_dir
     root_r += '/' if root_r[-1] != '/' else ''
@@ -77,7 +81,7 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
         timer.tic()
         blob = torch.from_numpy(img).cuda().unsqueeze(0)
         if opt.attack:
-            online_targets, adImg, noise = tracker.update_attack(blob, img0, name=path.replace(root_r, ''))
+            online_targets_ori, output_stracks_att, adImg, noise = tracker.update_attack(blob, img0, name=path.replace(root_r, ''))
 
             imgPath = os.path.join(imgRoot, path.replace(root_r, ''))
             os.makedirs(os.path.split(imgPath)[0], exist_ok=True)
@@ -86,12 +90,23 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
 
             cv2.imwrite(imgPath, adImg)
             cv2.imwrite(noisePath, noise)
+
+            online_tlwhs = []
+            online_ids = []
+            for t in output_stracks_att:
+                tlwh = t.tlwh
+                tid = t.track_id
+                vertical = tlwh[2] / tlwh[3] > 1.6
+                if tlwh[2] * tlwh[3] > opt.min_box_area and not vertical:
+                    online_tlwhs.append(tlwh)
+                    online_ids.append(tid)
+            results_att.append((frame_id + 1, online_tlwhs, online_ids))
         else:
-            online_targets = tracker.update(blob, img0, name=path.replace(root_r, ''))
+            online_targets_ori = tracker.update(blob, img0, name=path.replace(root_r, ''))
 
         online_tlwhs = []
         online_ids = []
-        for t in online_targets:
+        for t in online_targets_ori:
             tlwh = t.tlwh
             tid = t.track_id
             vertical = tlwh[2] / tlwh[3] > 1.6
@@ -116,18 +131,25 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
         frame_id += 1
     # save results
     write_results(result_filename, results, data_type)
+    if opt.attack:
+        write_results(result_filename.replace('.txt', '_attack.txt'), results_att, data_type)
     return frame_id, timer.average_time, timer.calls
 
 
 def main(opt, data_root='/data/MOT16/train', det_root=None, seqs=('MOT16-05',), exp_name='demo',
          save_images=False, save_videos=False, show_image=True):
     logger.setLevel(logging.INFO)
-    result_root = os.path.join(data_root, '..', 'results', exp_name)
+    root_r = opt.data_dir
+    root_r += '/' if root_r[-1] != '/' else ''
+    root = opt.output_dir
+    root += '/' if root[-1] != '/' else ''
+    result_root = os.path.join(opt.output_dir, 'results', exp_name)
     mkdir_if_missing(result_root)
     data_type = 'mot'
 
     # run tracking
     accs = []
+    accs_att = []
     n_frame = 0
     timer_avgs, timer_calls = [], []
     for seq in seqs:
@@ -151,12 +173,9 @@ def main(opt, data_root='/data/MOT16/train', det_root=None, seqs=('MOT16-05',), 
         logger.info('Evaluate seq: {}'.format(seq))
 
         accs.append(evaluator.eval_file(result_filename))
+        accs_att.append(evaluator.eval_file(result_filename.replace('.txt', '_attack.txt')))
         if save_videos:
             if opt.attack:
-                root_r = opt.data_dir
-                root_r += '/' if root_r[-1] != '/' else ''
-                root = opt.output_dir
-                root += '/' if root[-1] != '/' else ''
                 output_dir = output_dir.replace(root_r, os.path.join(root, 'image/'))
             output_video_path = osp.join(output_dir, '{}.mp4'.format(seq))
             cmd_str = 'ffmpeg -f image2 -i {}/%05d.jpg -c:v copy {}'.format(output_dir, output_video_path)
@@ -172,13 +191,23 @@ def main(opt, data_root='/data/MOT16/train', det_root=None, seqs=('MOT16-05',), 
     mh = mm.metrics.create()
     # import pdb; pdb.set_trace()
     summary = Evaluator.get_summary(accs, seqs, metrics)
+    summary_att = Evaluator.get_summary(accs_att, seqs, metrics)
     strsummary = mm.io.render_summary(
         summary,
         formatters=mh.formatters,
         namemap=mm.io.motchallenge_metric_names
     )
+    strsummary_att = mm.io.render_summary(
+        summary_att,
+        formatters=mh.formatters,
+        namemap=mm.io.motchallenge_metric_names
+    )
+    print('=' * 50 + 'origin' + '=' * 50)
     print(strsummary)
+    print('=' * 50 + 'attack' + '=' * 50)
+    print(strsummary_att)
     Evaluator.save_summary(summary, os.path.join(result_root, 'summary_{}.xlsx'.format(exp_name)))
+    Evaluator.save_summary(summary_att, os.path.join(result_root, 'summary_{}_attack.xlsx'.format(exp_name)))
 
 
 if __name__ == '__main__':
@@ -234,13 +263,13 @@ if __name__ == '__main__':
                       MOT17-14-SDP'''
         data_root = os.path.join(opt.data_dir, 'MOT17/images/test')
     if opt.val_mot17:
-        seqs_str = '''MOT17-02-SDP
-                      MOT17-04-SDP
-                      MOT17-05-SDP
-                      MOT17-09-SDP
-                      MOT17-10-SDP
-                      MOT17-11-SDP
-                      MOT17-13-SDP'''
+        seqs_str = '''MOT17-02-SDP'''
+                      # MOT17-04-SDP
+                      # MOT17-05-SDP
+                      # MOT17-09-SDP
+                      # MOT17-10-SDP
+                      # MOT17-11-SDP
+                      # MOT17-13-SDP'''
         # if not opt.attack:
         #     opt.data_dir = '/home/derry/Disk/data/MOT/image'
         # opt.data_dir = '/home/derry/Disk/data/MOT_v3/image'

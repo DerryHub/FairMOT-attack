@@ -901,7 +901,7 @@ class JDETracker(object):
         self.removed_stracks_.extend(removed_stracks)
         self.tracked_stracks_, self.lost_stracks_ = remove_duplicate_stracks(self.tracked_stracks_, self.lost_stracks_)
         # get scores of lost tracks
-        output_stracks = [track for track in self.tracked_stracks_ if track.is_activated]
+        output_stracks_ori = [track for track in self.tracked_stracks_ if track.is_activated]
 
         logger.debug('===========Frame {}=========='.format(self.frame_id_))
         logger.debug('Activated: {}'.format([track.track_id for track in activated_starcks]))
@@ -926,7 +926,7 @@ class JDETracker(object):
 
         self.update_ad(im_blob, img0, dets_raw, inds, tracks_ad, **kwargs)
 
-        output_stracks = self.update(im_blob, img0, **kwargs)
+        output_stracks_att = self.update(im_blob, img0, **kwargs)
 
         noise = self.recoverNoise(noise, img0)
         # import pdb; pdb.set_trace()
@@ -935,7 +935,7 @@ class JDETracker(object):
         noise = (noise - np.min(noise)) / (np.max(noise) - np.min(noise))
         noise = (noise * 255).astype(np.uint8)
 
-        return output_stracks, adImg, noise
+        return output_stracks_ori, output_stracks_att, adImg, noise
 
     def update_ad(self, im_blob, img0, dets, inds, tracks_ad, **kwargs):
         width = img0.shape[1]
