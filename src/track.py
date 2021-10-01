@@ -153,7 +153,7 @@ def evaluate_attack(result_filename_ori, result_filename_att):
     ori_track_len = ori_track_len.reshape([-1, 1]).repeat(len(att_all_ids), axis=1)
     att_track_len = att_track_len.reshape([1, -1]).repeat(len(ori_all_ids), axis=0)
     track_iou = track_union / (ori_track_len + att_track_len - track_union)
-    mean_fit = track_iou.sum(axis=1).mean()
+    mean_fit = track_union.sum() / ori_track_len[:, 0].sum()
     mean_iou = track_iou.max(axis=1).mean()
     import pdb; pdb.set_trace()
 
