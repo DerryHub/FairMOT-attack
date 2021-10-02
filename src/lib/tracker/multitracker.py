@@ -518,25 +518,6 @@ class JDETracker(object):
         noise = im_blob.grad.sign() * epsilon
         return noise
 
-    # def fgsmV1(self, im_blob, id_features, last_id_features, dets, epsilon=0.03):
-    #     ious = bbox_ious(np.ascontiguousarray(dets[:, :4], dtype=np.float),
-    #                      np.ascontiguousarray(dets[:, :4], dtype=np.float))
-    #
-    #     ious = self.processIoUs(ious)
-    #     loss = 0
-    #     for id_feature in id_features:
-    #         for i in range(dets.shape[0]):
-    #             for j in range(i):
-    #                 if ious[i, j] > 0:
-    #                     loss += torch.mm(id_feature[i:i + 1], id_feature[j:j + 1].T).squeeze()
-    #             if last_id_features[i] is not None:
-    #                 last_id_feature = torch.from_numpy(last_id_features[i]).unsqueeze(0).cuda()
-    #                 loss -= torch.mm(id_feature[i:i + 1], last_id_feature.T).squeeze()
-    #     if isinstance(loss, int):
-    #         return torch.zeros_like(im_blob)
-    #     loss.backward()
-    #     noise = im_blob.grad.sign() * epsilon
-    #     return noise
 
     def fgsmV1(self, im_blob, id_features, last_id_features, dets, epsilon=0.03):
         ious = bbox_ious(np.ascontiguousarray(dets[:, :4], dtype=np.float),
@@ -561,25 +542,6 @@ class JDETracker(object):
         noise = im_blob.grad.sign() * epsilon
         return noise
 
-    # def fgsmV2(self, im_blob, id_features, last_ad_id_features, dets, epsilon=0.03):
-    #     ious = bbox_ious(np.ascontiguousarray(dets[:, :4], dtype=np.float),
-    #                      np.ascontiguousarray(dets[:, :4], dtype=np.float))
-    #
-    #     ious = self.processIoUs(ious)
-    #     loss = 0
-    #     for id_feature in id_features:
-    #         for i in range(dets.shape[0]):
-    #             for j in range(i):
-    #                 if ious[i, j] > 0:
-    #                     loss += torch.mm(id_feature[i:i + 1], id_feature[j:j + 1].T).squeeze()
-    #             if last_ad_id_features[i] is not None:
-    #                 last_ad_id_feature = torch.from_numpy(last_ad_id_features[i]).unsqueeze(0).cuda()
-    #                 loss -= torch.mm(id_feature[i:i + 1], last_ad_id_feature.T).squeeze()
-    #     if isinstance(loss, int):
-    #         return torch.zeros_like(im_blob)
-    #     loss.backward()
-    #     noise = im_blob.grad.sign() * epsilon
-    #     return noise
 
     def fgsmV2(self, im_blob, id_features, last_ad_id_features, dets, epsilon=0.03):
         ious = bbox_ious(np.ascontiguousarray(dets[:, :4], dtype=np.float),
@@ -643,28 +605,75 @@ class JDETracker(object):
         # noise = gaussianBlurConv(noise)
         return noise
 
-    # def fgsmV3(self, im_blob, id_features, last_id_features, last_ad_id_features, dets, epsilon=0.03):
-    #     ious = bbox_ious(np.ascontiguousarray(dets[:, :4], dtype=np.float),
-    #                      np.ascontiguousarray(dets[:, :4], dtype=np.float))
-    #
-    #     ious = self.processIoUs(ious)
-    #     loss = 0
-    #     for id_feature in id_features:
-    #         for i in range(dets.shape[0]):
-    #             for j in range(i):
-    #                 if ious[i, j] > 0:
-    #                     loss += torch.mm(id_feature[i:i + 1], id_feature[j:j + 1].T).squeeze()
-    #             if last_id_features[i] is not None:
-    #                 last_id_feature = torch.from_numpy(last_id_features[i]).unsqueeze(0).cuda()
-    #                 loss -= torch.mm(id_feature[i:i + 1], last_id_feature.T).squeeze()
-    #             if last_ad_id_features[i] is not None:
-    #                 last_ad_id_feature = torch.from_numpy(last_ad_id_features[i]).unsqueeze(0).cuda()
-    #                 loss -= torch.mm(id_feature[i:i + 1], last_ad_id_feature.T).squeeze()
-    #     if isinstance(loss, int):
-    #         return torch.zeros_like(im_blob)
-    #     loss.backward()
-    #     noise = im_blob.grad.sign() * epsilon
-    #     return noise
+    def fgsm_l2(self, im_blob, id_features, last_ad_id_features, dets, outputs_ori=None, outputs=None, ori_im_blob=None, lr=0.1):
+        ious = bbox_ious(np.ascontiguousarray(dets[:, :4], dtype=np.float),
+                         np.ascontiguousarray(dets[:, :4], dtype=np.float))
+
+        ious = self.processIoUs(ious)
+        loss = 0
+        for id_feature in id_features:
+            for i in range(dets.shape[0]):
+                for j in range(i):
+                    if ious[i, j] > 0:
+                        if last_ad_id_features[i] is not None:
+                            last_ad_id_feature = torch.from_numpy(last_ad_id_features[i]).unsqueeze(0).cuda()
+                            loss -= torch.mm(id_feature[i:i + 1], last_ad_id_feature.T).squeeze()
+                            loss += torch.mm(id_feature[j:j + 1], last_ad_id_feature.T).squeeze()
+                        if last_ad_id_features[j] is not None:
+                            last_ad_id_feature = torch.from_numpy(last_ad_id_features[j]).unsqueeze(0).cuda()
+                            loss -= torch.mm(id_feature[j:j + 1], last_ad_id_feature.T).squeeze()
+                            loss += torch.mm(id_feature[i:i + 1], last_ad_id_feature.T).squeeze()
+                        if last_ad_id_features[i] is None and last_ad_id_features[j] is None:
+                            loss += torch.mm(id_feature[i:i + 1], id_feature[j:j + 1].T).squeeze()
+
+        if ori_im_blob is not None:
+            loss_det = 0
+            for key in ['hm', 'wh', 'reg']:
+                loss_det -= smoothL1(outputs[key], outputs_ori[key].data)
+            loss += loss_det
+            loss -= mse(im_blob, ori_im_blob)
+        if isinstance(loss, int):
+            return torch.zeros_like(im_blob)
+        loss.backward()
+        noise = im_blob.grad * lr
+        # noise = gaussianBlurConv(noise)
+        return noise
+
+    def fgsm_l2_(self, im_blob, id_features, last_ad_id_features, dets, outputs_ori=None, outputs=None, ori_im_blob=None, lr=0.1):
+        ious = bbox_ious(np.ascontiguousarray(dets[:, :4], dtype=np.float),
+                         np.ascontiguousarray(dets[:, :4], dtype=np.float))
+
+        ious = self.processIoUs(ious)
+        loss = 0
+        for id_feature in id_features:
+            for i in range(dets.shape[0]):
+                for j in range(i):
+                    if ious[i, j] > 0:
+                        if last_ad_id_features[i] is not None:
+                            last_ad_id_feature = torch.from_numpy(last_ad_id_features[i]).unsqueeze(0).cuda()
+                            sim_1 = torch.mm(id_feature[i:i + 1], last_ad_id_feature.T).squeeze()
+                            sim_2 = torch.mm(id_feature[j:j + 1], last_ad_id_feature.T).squeeze()
+                            loss += min(sim_2 - sim_1, 0.5)
+                        if last_ad_id_features[j] is not None:
+                            last_ad_id_feature = torch.from_numpy(last_ad_id_features[j]).unsqueeze(0).cuda()
+                            sim_1 = torch.mm(id_feature[j:j + 1], last_ad_id_feature.T).squeeze()
+                            sim_2 = torch.mm(id_feature[i:i + 1], last_ad_id_feature.T).squeeze()
+                            loss += min(sim_2 - sim_1, 0.5)
+                        if last_ad_id_features[i] is None and last_ad_id_features[j] is None:
+                            loss += torch.mm(id_feature[i:i + 1], id_feature[j:j + 1].T).squeeze()
+
+        if ori_im_blob is not None:
+            loss_det = 0
+            for key in ['hm', 'wh', 'reg']:
+                loss_det -= smoothL1(outputs[key], outputs_ori[key].data)
+            loss += loss_det
+            loss -= mse(im_blob, ori_im_blob)
+        if isinstance(loss, int):
+            return torch.zeros_like(im_blob)
+        loss.backward()
+        noise = im_blob.grad * lr
+        # noise = gaussianBlurConv(noise)
+        return noise
 
     def fgsmV3(self, im_blob, id_features, last_id_features, last_ad_id_features, dets, epsilon=0.03):
         ious = bbox_ious(np.ascontiguousarray(dets[:, :4], dtype=np.float),
@@ -700,6 +709,23 @@ class JDETracker(object):
             im_blob_ad = torch.clip(im_blob + noise, min=0, max=1).data
             id_features, outputs = self.forwardFeature(im_blob_ad, inds, remain_inds)
             noise += self.fgsmV2_(im_blob_ad, id_features, last_ad_id_features, dets, outputs_ori, outputs, epsilon=alpha)
+        return noise
+
+
+    def ifgsm_gd(self, im_blob, id_features, last_ad_id_features, dets, inds, remain_inds, outputs_ori):
+        noise = self.fgsm_l2(im_blob, id_features, last_ad_id_features, dets)
+        for i in range(50):
+            im_blob_ad = torch.clip(im_blob + noise, min=0, max=1).data
+            id_features, outputs = self.forwardFeature(im_blob_ad, inds, remain_inds)
+            noise_ = self.fgsm_l2_(
+                im_blob_ad, id_features, last_ad_id_features, dets,
+                outputs_ori=outputs_ori,
+                outputs=outputs,
+                ori_im_blob=im_blob
+            )
+            noise += noise_
+            if (noise_**2).sum().sqrt().item() < 1:
+                break
         return noise
 
 
@@ -909,15 +935,23 @@ class JDETracker(object):
         logger.debug('Lost: {}'.format([track.track_id for track in lost_stracks]))
         logger.debug('Removed: {}'.format([track.track_id for track in removed_stracks]))
 
-        # noise = self.fgsmV3(im_blob, id_features, last_id_features, last_ad_id_features, dets)
+        attack = self.opt.attack
+        if attack == 'fgsm':
+            noise = self.fgsm(im_blob, id_features, dets)
+        elif attack == 'fgsmV1':
+            noise = self.fgsmV1(im_blob, id_features, last_id_features, dets)
+        elif attack == 'fgsmV2':
+            noise = self.fgsmV2(im_blob, id_features, last_ad_id_features, dets)
+        elif attack == 'fgsmV3':
+            noise = self.fgsmV3(im_blob, id_features, last_id_features, last_ad_id_features, dets)
+        elif attack == 'ifgsmV2':
+            noise = self.ifgsmV2(im_blob, id_features, last_ad_id_features, dets, inds, remain_inds, outputs_ori=output)
+        elif attack == 'ifgsm_gd':
+            noise = self.ifgsm_gd(im_blob, id_features, last_ad_id_features, dets, inds, remain_inds, outputs_ori=output)
+        else:
+            raise Exception(f'Cannot find {attack}')
 
-        # noise = self.fgsmV2(im_blob, id_features, last_ad_id_features, dets)
-
-        # noise = self.fgsmV1(im_blob, id_features, last_id_features, dets)
-
-        # noise = self.fgsm(im_blob, id_features, dets)
-
-        noise = self.ifgsmV2(im_blob, id_features, last_ad_id_features, dets, inds, remain_inds, outputs_ori=output)
+        l2_dis = (noise ** 2).sum().sqrt().item()
 
         # noise = self.recoverNoise(noise, img0)
         # noise = self.deRecoverNoise(noise, img0)
@@ -935,7 +969,7 @@ class JDETracker(object):
         noise = (noise - np.min(noise)) / (np.max(noise) - np.min(noise))
         noise = (noise * 255).astype(np.uint8)
 
-        return output_stracks_ori, output_stracks_att, adImg, noise
+        return output_stracks_ori, output_stracks_att, adImg, noise, l2_dis
 
     def update_ad(self, im_blob, img0, dets, inds, tracks_ad, **kwargs):
         width = img0.shape[1]

@@ -153,9 +153,10 @@ def evaluate_attack(result_filename_ori, result_filename_att):
     ori_track_len = ori_track_len.reshape([-1, 1]).repeat(len(att_all_ids), axis=1)
     att_track_len = att_track_len.reshape([1, -1]).repeat(len(ori_all_ids), axis=0)
     track_iou = track_union / (ori_track_len + att_track_len - track_union)
-    mean_fit = track_union.sum() / ori_track_len[:, 0].sum()
+    mean_recall = track_union.sum() / ori_track_len[:, 0].sum()
+    mean_precision = track_union.sum() / att_track_len[0].sum()
     mean_iou = track_iou.max(axis=1).mean()
-    import pdb; pdb.set_trace()
+    return mean_recall, mean_precision, mean_iou
 
 
 def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None, show_image=True, frame_rate=30):
@@ -172,6 +173,7 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
     root += '/' if root[-1] != '/' else ''
     imgRoot = os.path.join(root, 'image')
     noiseRoot = os.path.join(root, 'noise')
+    l2_distance = []
     for path, img, img0 in dataloader:
         if frame_id % 20 == 0:
             logger.info('Processing frame {} ({:.2f} fps)'.format(frame_id, 1. / max(1e-5, timer.average_time)))
@@ -181,11 +183,13 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
         blob = torch.from_numpy(img).cuda().unsqueeze(0)
 
         if opt.attack:
-            online_targets_ori, output_stracks_att, adImg, noise = tracker.update_attack(blob, img0, name=path.replace(root_r, ''))
+            online_targets_ori, output_stracks_att, adImg, noise, l2_dis = tracker.update_attack(blob, img0, name=path.replace(root_r, ''))
             imgPath = os.path.join(imgRoot, path.replace(root_r, ''))
             os.makedirs(os.path.split(imgPath)[0], exist_ok=True)
             noisePath = os.path.join(noiseRoot, path.replace(root_r, ''))
             os.makedirs(os.path.split(noisePath)[0], exist_ok=True)
+
+            l2_distance.append(l2_dis)
 
             # cv2.imwrite(imgPath, adImg)
             # cv2.imwrite(noisePath, noise)
@@ -235,7 +239,7 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
     write_results(result_filename, results, data_type)
     if opt.attack:
         write_results(result_filename.replace('.txt', '_attack.txt'), results_att, data_type)
-    return frame_id, timer.average_time, timer.calls
+    return frame_id, timer.average_time, timer.calls, l2_distance
 
 
 def main(opt, data_root='/data/MOT16/train', det_root=None, seqs=('MOT16-05',), exp_name='demo',
@@ -268,17 +272,25 @@ def main(opt, data_root='/data/MOT16/train', det_root=None, seqs=('MOT16-05',), 
         gt_frame_dict = evaluator.gt_frame_dict
         gt_ignore_frame_dict = evaluator.gt_ignore_frame_dict
 
-        evaluate_attack(result_filename, result_filename.replace('.txt', '_attack.txt'))
-        import pdb; pdb.set_trace()
+        # evaluate_attack(result_filename, result_filename.replace('.txt', '_attack.txt'))
+        # import pdb; pdb.set_trace()
 
-        nf, ta, tc = eval_seq(opt, dataloader, data_type, result_filename,
+        nf, ta, tc, l2_distance = eval_seq(opt, dataloader, data_type, result_filename,
                               save_dir=output_dir, show_image=show_image, frame_rate=frame_rate, gt_dict=gt_frame_dict)
+
+
         n_frame += nf
         timer_avgs.append(ta)
         timer_calls.append(tc)
 
         # eval
         logger.info('Evaluate seq: {}'.format(seq))
+
+        if opt.attack:
+            mean_recall, mean_precision, mean_iou = evaluate_attack(result_filename,
+                                                                    result_filename.replace('.txt', '_attack.txt'))
+            logger.info(f'mean_recall: {mean_recall}\tmean_precision: {mean_precision}\tmean_iou: {mean_iou}\t'
+                        f'mean_l2_distance: {sum(l2_distance) / len(l2_distance)}\n')
 
         accs.append(evaluator.eval_file(result_filename))
         if opt.attack:
@@ -323,6 +335,9 @@ def main(opt, data_root='/data/MOT16/train', det_root=None, seqs=('MOT16-05',), 
 if __name__ == '__main__':
     os.environ['CUDA_VISIBLE_DEVICES'] = '0'
     opt = opts().init()
+
+    if opt.attack:
+        opt.output_dir = os.path.join(opt.output_dir, opt.attack)
 
     if not opt.val_mot16:
         seqs_str = '''KITTI-13
