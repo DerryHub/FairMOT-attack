@@ -653,12 +653,12 @@ class JDETracker(object):
                             last_ad_id_feature = torch.from_numpy(last_ad_id_features[i]).unsqueeze(0).cuda()
                             sim_1 = torch.mm(id_feature[i:i + 1], last_ad_id_feature.T).squeeze()
                             sim_2 = torch.mm(id_feature[j:j + 1], last_ad_id_feature.T).squeeze()
-                            loss += min(sim_2 - sim_1, 0.5)
+                            loss += min(sim_2 - sim_1, 0.2)
                         if last_ad_id_features[j] is not None:
                             last_ad_id_feature = torch.from_numpy(last_ad_id_features[j]).unsqueeze(0).cuda()
                             sim_1 = torch.mm(id_feature[j:j + 1], last_ad_id_feature.T).squeeze()
                             sim_2 = torch.mm(id_feature[i:i + 1], last_ad_id_feature.T).squeeze()
-                            loss += min(sim_2 - sim_1, 0.5)
+                            loss += min(sim_2 - sim_1, 0.2)
                         if last_ad_id_features[i] is None and last_ad_id_features[j] is None:
                             loss += torch.mm(id_feature[i:i + 1], id_feature[j:j + 1].T).squeeze()
 
