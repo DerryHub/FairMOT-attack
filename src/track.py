@@ -395,22 +395,20 @@ if __name__ == '__main__':
                       # MOT17-10-SDP
                       # MOT17-11-SDP
                       # MOT17-13-SDP'''
-        # if not opt.attack:
-        #     opt.data_dir = '/home/derry/Disk/data/MOT/image'
-        # opt.data_dir = '/home/derry/Disk/data/MOT_v3/image'
         data_root = os.path.join(opt.data_dir, 'MOT17/images/train')
     if opt.val_mot15:
-        seqs_str = '''KITTI-13
-                      KITTI-17
-                      ETH-Bahnhof
-                      ETH-Sunnyday
-                      PETS09-S2L1
-                      TUD-Campus
-                      TUD-Stadtmitte
-                      ADL-Rundle-6
-                      ADL-Rundle-8
-                      ETH-Pedcross2
-                      TUD-Stadtmitte'''
+        # seqs_str = '''KITTI-13
+        #               KITTI-17
+        #               ETH-Bahnhof
+        #               ETH-Sunnyday
+        #               PETS09-S2L1
+        #               TUD-Campus
+        #               TUD-Stadtmitte
+        #               ADL-Rundle-6
+        #               ADL-Rundle-8
+        #               ETH-Pedcross2
+        #               TUD-Stadtmitte'''
+        seqs_str = '''PETS09-S2L1'''
         data_root = os.path.join(opt.data_dir, 'MOT15/images/train')
     if opt.val_mot20:
         seqs_str = '''MOT20-01
