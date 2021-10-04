@@ -1653,7 +1653,7 @@ class JDETracker(object):
         logger.debug('Lost: {}'.format([track.track_id for track in lost_stracks]))
         logger.debug('Removed: {}'.format([track.track_id for track in removed_stracks]))
 
-        attack_id = 19
+        attack_id = 2
 
         attack = self.opt.attack
         noise = torch.zeros_like(im_blob)
