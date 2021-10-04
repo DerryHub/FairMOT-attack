@@ -315,6 +315,7 @@ class JDETracker(object):
         self.kalman_filter_ = KalmanFilter()
 
         self.attack_sg = True
+        self.attack_iou_thr = 0.4
 
     def post_process(self, dets, meta):
         dets = dets.detach().cpu().numpy()
@@ -749,7 +750,6 @@ class JDETracker(object):
             im_blob,
             img0,
             id_features,
-            last_ad_id_features,
             dets,
             inds,
             remain_inds,
@@ -767,22 +767,29 @@ class JDETracker(object):
         hm_ori = outputs_ori['hm'].data * 2
         outputs = outputs_ori
         i = 0
+        last_ad_id_features = [None for _ in range(len(id_features[0]))]
+        strack_pool = copy.deepcopy(last_info['last_strack_pool'])
+        for strack in strack_pool:
+            if strack.track_id == attack_id:
+                last_ad_id_features[attack_ind] = strack.smooth_feat
+            elif strack.track_id == target_id:
+                last_ad_id_features[target_ind] = strack.smooth_feat
         while ae_id == attack_id or ae_id is None:
             loss = 0
-            for id_feature in id_features:
-                #TODO last_ad_id_features改成攻击后的
-                if last_ad_id_features[attack_ind] is not None:
-                    last_ad_id_feature = torch.from_numpy(last_ad_id_features[attack_ind]).unsqueeze(0).cuda()
-                    sim_1 = torch.mm(id_feature[attack_ind:attack_ind + 1], last_ad_id_feature.T).squeeze()
-                    sim_2 = torch.mm(id_feature[target_ind:target_ind + 1], last_ad_id_feature.T).squeeze()
-                    loss += sim_2 - sim_1
-                if last_ad_id_features[target_ind] is not None:
-                    last_ad_id_feature = torch.from_numpy(last_ad_id_features[target_ind]).unsqueeze(0).cuda()
-                    sim_1 = torch.mm(id_feature[target_ind:target_ind + 1], last_ad_id_feature.T).squeeze()
-                    sim_2 = torch.mm(id_feature[attack_ind:attack_ind + 1], last_ad_id_feature.T).squeeze()
-                    loss += sim_2 - sim_1
-                if last_ad_id_features[attack_ind] is None and last_ad_id_features[attack_ind] is None:
-                    loss += torch.mm(id_feature[attack_ind:attack_ind + 1], id_feature[target_ind:target_ind + 1].T).squeeze()
+            # for id_feature in id_features:
+            id_feature = id_features[4]
+            if last_ad_id_features[attack_ind] is not None:
+                last_ad_id_feature = torch.from_numpy(last_ad_id_features[attack_ind]).unsqueeze(0).cuda()
+                sim_1 = torch.mm(id_feature[attack_ind:attack_ind + 1], last_ad_id_feature.T).squeeze()
+                sim_2 = torch.mm(id_feature[target_ind:target_ind + 1], last_ad_id_feature.T).squeeze()
+                loss += sim_2 - sim_1
+            if last_ad_id_features[target_ind] is not None:
+                last_ad_id_feature = torch.from_numpy(last_ad_id_features[target_ind]).unsqueeze(0).cuda()
+                sim_1 = torch.mm(id_feature[target_ind:target_ind + 1], last_ad_id_feature.T).squeeze()
+                sim_2 = torch.mm(id_feature[attack_ind:attack_ind + 1], last_ad_id_feature.T).squeeze()
+                loss += sim_2 - sim_1
+            if last_ad_id_features[attack_ind] is None and last_ad_id_features[attack_ind] is None:
+                loss += torch.mm(id_feature[attack_ind:attack_ind + 1], id_feature[target_ind:target_ind + 1].T).squeeze()
             loss -= mse(im_blob, im_blob_ori)
             loss -= mse(outputs['hm'].view(-1)[inds[0][remain_inds]], hm_ori.view(-1)[inds[0][remain_inds]])
 
@@ -804,9 +811,8 @@ class JDETracker(object):
             if last_ad_id_features_ is not None:
                 last_ad_id_features = last_ad_id_features_
             i += 1
-            if i > 15:
-                print('fail')
-                break
+            if i > 50:
+                return None
         return noise
 
 
@@ -883,6 +889,7 @@ class JDETracker(object):
         ae_attack_ind = det_ind[0]
         ae_target_ind = det_ind[1]
 
+
         index = list(range(len(id_features[0])))
         index[attack_ind] = ae_attack_ind
         index[target_ind] = ae_target_ind
@@ -918,7 +925,7 @@ class JDETracker(object):
             det = detections[idet]
             if idet == ae_attack_ind:
                 ae_attack_id = track.track_id
-                # if self.frame_id_ == 34:
+                # if ae_attack_id == 2:
                 #     import pdb; pdb.set_trace()
                 return id_features_, last_ad_id_features, output, ae_attack_id
 
@@ -937,8 +944,6 @@ class JDETracker(object):
             det = detections[idet]
             if idet == ae_attack_ind:
                 ae_attack_id = track.track_id
-                # if self.frame_id_ == 34:
-                #     import pdb; pdb.set_trace()
                 return id_features_, last_ad_id_features, output, ae_attack_id
 
 
@@ -1025,7 +1030,6 @@ class JDETracker(object):
             # pdb.set_trace()
             return True
         return False
-
 
     def update_attack_(self, im_blob, img0, **kwargs):
         self.frame_id_ += 1
@@ -1462,12 +1466,11 @@ class JDETracker(object):
         logger.debug('Lost: {}'.format([track.track_id for track in lost_stracks]))
         logger.debug('Removed: {}'.format([track.track_id for track in removed_stracks]))
 
-        attack_id = 2
+        attack_id = 19
 
         attack = self.opt.attack
 
         noise = torch.zeros_like(im_blob)
-        thr = 0.4
         if self.attack_sg and self.frame_id_ > 5:
             for attack_ind, track_id in enumerate(dets_ids):
                 if track_id == attack_id:
@@ -1477,15 +1480,14 @@ class JDETracker(object):
                     ious = self.processIoUs(ious)
                     ious = ious + ious.T
                     target_ind = np.argmax(ious[attack_ind])
-                    if ious[attack_ind][target_ind] > thr:
+                    if ious[attack_ind][target_ind] > self.attack_iou_thr:
                         target_id = dets_ids[target_ind]
                         fit = self.CheckFit(dets, id_feature, attack_id, attack_ind, target_id, target_ind)
                         if fit:
-                            noise = self.ifgsm_gd_sg(
+                            noise_ = self.ifgsm_gd_sg(
                                 im_blob,
                                 img0,
                                 id_features,
-                                last_ad_id_features,
                                 dets,
                                 inds,
                                 remain_inds,
@@ -1496,20 +1498,23 @@ class JDETracker(object):
                                 target_id=target_id,
                                 target_ind=target_ind
                             )
-                            thr = 0
+                            if noise_ is not None:
+                                print(f'attack frame {self.frame_id_}: SUCCESS\tl2 distance: {(noise_ ** 2).sum().sqrt().item()}')
+                                noise = noise_
+                                self.attack_iou_thr = 0
+                            else:
+                                print(f'attack frame {self.frame_id_}: FAIL')
                     else:
-                        thr = 0.4
-                        # self.attack_sg = False
+                        self.attack_iou_thr = 0.4
                     break
 
         l2_dis = (noise ** 2).sum().sqrt().item()
-
         # noise = self.recoverNoise(noise, img0)
         # noise = self.deRecoverNoise(noise, img0)
         im_blob = torch.clip(im_blob+noise, min=0, max=1)
         # im_blob = (im_blob * 255).int().float() / 255
 
-        self.update_ad(im_blob, img0, dets_raw, inds, tracks_ad, **kwargs)
+        # self.update_ad(im_blob, img0, dets_raw, inds, tracks_ad, **kwargs)
 
         output_stracks_att = self.update(im_blob, img0, **kwargs)
 
@@ -1566,10 +1571,10 @@ class JDETracker(object):
         # import pdb; pdb.set_trace()
         for track, index in tracks_ad:
             lst = []
-            for feat in id_features:
-                lst.append(feat[index])
+            feat = id_features[4]
+            lst.append(feat[index])
             feat = sum(lst)
-            feat /= (feat ** 2).sum().sqrt()
+            # feat /= (feat ** 2).sum().sqrt()
             feat = feat.cpu().numpy()
             track.update_features_ad(feat)
 
