@@ -739,7 +739,8 @@ class JDETracker(object):
     ):
         img0_h, img0_w = img0.shape[:2]
         H, W = outputs_ori['hm'].size()[2:]
-        r_w, r_h = W / img0_w, H / img0_h
+        r_w, r_h = img0_w / W, img0_h / H
+        r_max = max(r_w, r_h)
         dh = H - min(r_w, r_h) * img0_h
         dw = W - min(r_w, r_h) * img0_w
         ae_id = attack_id
@@ -758,13 +759,13 @@ class JDETracker(object):
             if strack.track_id == attack_id:
                 last_ad_id_features[attack_ind] = strack.smooth_feat
                 last_attack_det = torch.from_numpy(strack.tlbr).cuda()
-                last_attack_det[[0, 2]] *= r_w
-                last_attack_det[[1, 3]] *= r_h
+                last_attack_det[[0, 2]] = (last_attack_det[[0, 2]] - 0.5 * W * (r_w - r_max)) / r_max
+                last_attack_det[[1, 3]] = (last_attack_det[[1, 3]] - 0.5 * H * (r_h - r_max)) / r_max
             elif strack.track_id == target_id:
                 last_ad_id_features[target_ind] = strack.smooth_feat
                 last_target_det = torch.from_numpy(strack.tlbr).cuda()
-                last_target_det[[0, 2]] *= r_w
-                last_target_det[[1, 3]] *= r_h
+                last_target_det[[0, 2]] = (last_target_det[[0, 2]] - 0.5 * W * (r_w - r_max)) / r_max
+                last_target_det[[1, 3]] = (last_target_det[[1, 3]] - 0.5 * H * (r_h - r_max)) / r_max
 
         index = inds[0][remain_inds]
         ae_attack_ind, ae_target_ind = attack_ind, target_ind
@@ -782,7 +783,7 @@ class JDETracker(object):
                 sim_1 = torch.mm(id_feature[target_ind:target_ind + 1], last_ad_id_feature.T).squeeze()
                 sim_2 = torch.mm(id_feature[attack_ind:attack_ind + 1], last_ad_id_feature.T).squeeze()
                 loss += sim_2 - sim_1
-            if last_ad_id_features[attack_ind] is None and last_ad_id_features[attack_ind] is None:
+            if last_ad_id_features[attack_ind] is None and last_ad_id_features[target_ind] is None:
                 loss += torch.mm(id_feature[attack_ind:attack_ind + 1], id_feature[target_ind:target_ind + 1].T).squeeze()
             loss -= mse(im_blob, im_blob_ori)
             loss -= mse(outputs['hm'].view(-1)[inds[0][remain_inds]], hm_ori.view(-1)[inds[0][remain_inds]])
@@ -879,7 +880,8 @@ class JDETracker(object):
     ):
         img0_h, img0_w = img0.shape[:2]
         H, W = outputs_ori['hm'].size()[2:]
-        r_w, r_h = W / img0_w, H / img0_h
+        r_w, r_h = img0_w / W, img0_h / H
+        r_max = max(r_w, r_h)
         dh = H - min(r_w, r_h) * img0_h
         dw = W - min(r_w, r_h) * img0_w
         ae_id = attack_id
@@ -897,14 +899,14 @@ class JDETracker(object):
         for strack in strack_pool:
             if strack.track_id == attack_id:
                 last_ad_id_features[attack_ind] = strack.smooth_feat
-                last_attack_det = torch.from_numpy(strack.tlbr).cuda()
-                last_attack_det[[0, 2]] *= r_w
-                last_attack_det[[1, 3]] *= r_h
+                last_attack_det = torch.from_numpy(strack.tlbr).cuda().float()
+                last_attack_det[[0, 2]] = (last_attack_det[[0, 2]] - 0.5 * W * (r_w - r_max)) / r_max
+                last_attack_det[[1, 3]] = (last_attack_det[[1, 3]] - 0.5 * H * (r_h - r_max)) / r_max
             elif strack.track_id == target_id:
                 last_ad_id_features[target_ind] = strack.smooth_feat
-                last_target_det = torch.from_numpy(strack.tlbr).cuda()
-                last_target_det[[0, 2]] *= r_w
-                last_target_det[[1, 3]] *= r_h
+                last_target_det = torch.from_numpy(strack.tlbr).cuda().float()
+                last_target_det[[0, 2]] = (last_target_det[[0, 2]] - 0.5 * W * (r_w - r_max)) / r_max
+                last_target_det[[1, 3]] = (last_target_det[[1, 3]] - 0.5 * H * (r_h - r_max)) / r_max
 
         index = inds[0][remain_inds]
         ae_attack_ind, ae_target_ind = attack_ind, target_ind
@@ -914,38 +916,69 @@ class JDETracker(object):
         while True:
             i += 1
             loss = 0
-            # for id_feature in id_features:
-            id_feature = id_features[4]
-            if last_ad_id_features[attack_ind] is not None:
-                last_ad_id_feature = torch.from_numpy(last_ad_id_features[attack_ind]).unsqueeze(0).cuda()
-                sim_1 = torch.mm(id_feature[attack_ind:attack_ind + 1], last_ad_id_feature.T).squeeze()
-                sim_2 = torch.mm(id_feature[target_ind:target_ind + 1], last_ad_id_feature.T).squeeze()
-                loss += sim_2 - sim_1
-            if last_ad_id_features[target_ind] is not None:
-                last_ad_id_feature = torch.from_numpy(last_ad_id_features[target_ind]).unsqueeze(0).cuda()
-                sim_1 = torch.mm(id_feature[target_ind:target_ind + 1], last_ad_id_feature.T).squeeze()
-                sim_2 = torch.mm(id_feature[attack_ind:attack_ind + 1], last_ad_id_feature.T).squeeze()
-                loss += sim_2 - sim_1
-            if last_ad_id_features[attack_ind] is None and last_ad_id_features[attack_ind] is None:
-                loss += torch.mm(id_feature[attack_ind:attack_ind + 1], id_feature[target_ind:target_ind + 1].T).squeeze()
+            loss_feat = 0
+            for id_i, id_feature in enumerate(id_features):
+            # id_feature = id_features[4]
+                if last_ad_id_features[attack_ind] is not None:
+                    last_ad_id_feature = torch.from_numpy(last_ad_id_features[attack_ind]).unsqueeze(0).cuda()
+                    sim_1 = torch.mm(id_feature[attack_ind:attack_ind + 1], last_ad_id_feature.T).squeeze()
+                    sim_2 = torch.mm(id_feature[target_ind:target_ind + 1], last_ad_id_feature.T).squeeze()
+                    # if id_i == 4:
+                    #     print(sim_2.item(), sim_1.item(), end='\t')
+                    loss_feat += sim_2 - sim_1
+                if last_ad_id_features[target_ind] is not None:
+                    last_ad_id_feature = torch.from_numpy(last_ad_id_features[target_ind]).unsqueeze(0).cuda()
+                    sim_1 = torch.mm(id_feature[target_ind:target_ind + 1], last_ad_id_feature.T).squeeze()
+                    sim_2 = torch.mm(id_feature[attack_ind:attack_ind + 1], last_ad_id_feature.T).squeeze()
+                    # if id_i == 4:
+                    #     print(sim_2.item(), sim_1.item())
+                    loss_feat += sim_2 - sim_1
+                if last_ad_id_features[attack_ind] is None and last_ad_id_features[target_ind] is None:
+                    loss_feat += torch.mm(id_feature[attack_ind:attack_ind + 1], id_feature[target_ind:target_ind + 1].T).squeeze()
+            loss += loss_feat / len(id_features)
             loss -= mse(im_blob, im_blob_ori)
             loss -= mse(outputs['hm'].view(-1)[inds[0][remain_inds]], hm_ori.view(-1)[inds[0][remain_inds]])
 
-            if i >= 20:
-
-                wh = outputs['wh'].permute(0, 2, 3, 1).view(-1, 2)[index]
-                reg = outputs['reg'].permute(0, 2, 3, 1).view(-1, 2)[index]
-                centers = torch.stack([index % W, index // W], dim=1)
-                centers = centers + reg
-                dets_output = torch.stack([
-                    centers[:, 0] - wh[:, 0] / 2,
-                    centers[:, 1] - wh[:, 1] / 2,
-                    centers[:, 0] + wh[:, 0] / 2,
-                    centers[:, 1] + wh[:, 1] / 2,
-                ], dim=1)
-
-                bboxs = torch.stack([dets_output[ae_attack_ind], dets_output[ae_target_ind]], dim=0)
-                loss += self.bbox_iou_tensor(bboxs) * 0.5
+            # if i >= 0:
+            #
+            #     wh = outputs['wh'].permute(0, 2, 3, 1).view(-1, 2)[index]
+            #     reg = outputs['reg'].permute(0, 2, 3, 1).view(-1, 2)[index]
+            #     centers = torch.stack([index % W, index // W], dim=1)
+            #     centers = centers + reg
+            #     dets_output = torch.stack([
+            #         centers[:, 0] - wh[:, 0] / 2,
+            #         centers[:, 1] - wh[:, 1] / 2,
+            #         centers[:, 0] + wh[:, 0] / 2,
+            #         centers[:, 1] + wh[:, 1] / 2,
+            #     ], dim=1)
+            #
+            #     # bboxs = torch.stack([dets_output[ae_attack_ind], dets_output[ae_target_ind]], dim=0)
+            #     # attack_det_center = (dets_output[ae_attack_ind][:2] + dets_output[ae_attack_ind][2:]) / 2
+            #     # target_det_center = (dets_output[ae_target_ind][:2] + dets_output[ae_target_ind][2:]) / 2
+            #     iou_loss = 0
+            #     if last_attack_det is not None:
+            #         att_lastAtt_det = torch.stack([dets_output[ae_attack_ind], last_attack_det])
+            #         tar_lastAtt_det = torch.stack([dets_output[ae_target_ind], last_attack_det])
+            #         # iou_loss += self.bbox_iou_tensor(tar_lastAtt_det) - \
+            #         #             self.bbox_iou_tensor(att_lastAtt_det)
+            #         iou_loss += mse(dets_output[ae_attack_ind], last_attack_det) - \
+            #                     mse(dets_output[ae_target_ind], last_attack_det)
+            #         # print(self.bbox_iou_tensor(tar_lastAtt_det.detach()).item(), self.bbox_iou_tensor(att_lastAtt_det.detach()).item(), end='\t')
+            #         # last_attack_det_center = (last_attack_det[:2] + last_attack_det[2:]) / 2
+            #         # iou_loss += ((attack_det_center - last_attack_det_center)**2).sum() - \
+            #         #             ((target_det_center - last_attack_det_center)**2).sum()
+            #     if last_target_det is not None:
+            #         att_lastTar_det = torch.stack([dets_output[ae_attack_ind], last_target_det])
+            #         tar_lastTar_det = torch.stack([dets_output[ae_target_ind], last_target_det])
+            #         # iou_loss += self.bbox_iou_tensor(att_lastTar_det) - \
+            #         #             self.bbox_iou_tensor(tar_lastTar_det)
+            #         iou_loss += mse(dets_output[ae_target_ind], last_target_det) - \
+            #                     mse(dets_output[ae_attack_ind], last_target_det)
+            #         # print(self.bbox_iou_tensor(att_lastTar_det.detach()).item(), self.bbox_iou_tensor(tar_lastTar_det.detach()).item())
+            #         # last_target_det_center = (last_target_det[:2] + last_target_det[2:]) / 2
+            #         # iou_loss += ((target_det_center - last_target_det_center) ** 2).sum() - \
+            #         #             ((attack_det_center - last_target_det_center) ** 2).sum()
+            #     loss += iou_loss
 
             loss.backward()
 
@@ -987,9 +1020,9 @@ class JDETracker(object):
                 last_ad_id_features = last_ad_id_features_
 
             if i > 50:
-                return None
                 # break
-        print(i)
+                return None
+        # print(i)
         return noise
 
     def bbox_iou_tensor(self, bboxs):
@@ -1048,12 +1081,12 @@ class JDETracker(object):
         det_ind = np.argmax(ious, axis=1)
 
         match = True
-        if ious[0, det_ind[0]] < 0.9 or ious[1, det_ind[1]] < 0.9:
+        if ious[0, det_ind[0]] < 0.7 or ious[1, det_ind[1]] < 0.7:
             dets = dets_
             inds = inds_
             remain_inds = remain_inds_
             match = False
-
+        # assert match
         id_features = []
         for i in range(3):
             for j in range(3):
@@ -1073,14 +1106,12 @@ class JDETracker(object):
         ae_attack_ind = det_ind[0]
         ae_target_ind = det_ind[1]
 
-
         index = list(range(len(id_features[0])))
         index[attack_ind] = ae_attack_ind
         index[target_ind] = ae_target_ind
 
         id_features_ = [torch.zeros_like(id_features[0]) for _ in range(len(id_features))]
         for i in range(9):
-            id_features_[i] = id_features[i][index]
             id_features_[i] = id_features[i][index]
 
         id_feature = _tranpose_and_gather_feat_expand(id_feature, inds)
@@ -1108,8 +1139,14 @@ class JDETracker(object):
             det = detections[idet]
             if idet == ae_attack_ind:
                 ae_attack_id = track.track_id
-                if ae_attack_id != attack_id:
-                    import pdb; pdb.set_trace()
+                # if self.frame_id_ == 28:
+                #     import pdb; pdb.set_trace()
+                # print(strack_pool[0].smooth_feat@det.smooth_feat, strack_pool[3].smooth_feat@det.smooth_feat, ae_attack_ind, matches)
+                # print(dists)
+                # import pdb;
+                # pdb.set_trace()
+                # if ae_attack_id != attack_id:
+                #     import pdb; pdb.set_trace()
                 return id_features_, last_ad_id_features, output, ae_attack_id, inds[0, remain_inds], ae_attack_ind, ae_target_ind
 
         ''' Step 3: Second association, with IOU'''
@@ -1127,8 +1164,8 @@ class JDETracker(object):
             det = detections[idet]
             if idet == ae_attack_ind:
                 ae_attack_id = track.track_id
-                if ae_attack_id != attack_id:
-                    import pdb; pdb.set_trace()
+                # if ae_attack_id != attack_id:
+                #     import pdb; pdb.set_trace()
                 return id_features_, last_ad_id_features, output, ae_attack_id, inds[0, remain_inds], ae_attack_ind, ae_target_ind
 
 
