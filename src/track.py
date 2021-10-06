@@ -183,7 +183,16 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
         blob = torch.from_numpy(img).cuda().unsqueeze(0)
 
         if opt.attack:
-            online_targets_ori, output_stracks_att, adImg, noise, l2_dis = tracker.update_attack(blob, img0, name=path.replace(root_r, ''))
+            if opt.attack == 'single':
+                online_targets_ori, output_stracks_att, adImg, noise, l2_dis = tracker.update_attack_sg(blob, img0,
+                                                                                                     name=path.replace(
+                                                                                                         root_r, ''))
+            elif opt.attack == 'multiple':
+                online_targets_ori, output_stracks_att, adImg, noise, l2_dis = tracker.update_attack_mt(blob, img0,
+                                                                                                     name=path.replace(
+                                                                                                         root_r, ''))
+            else:
+                raise RuntimeError()
             imgPath = os.path.join(imgRoot, path.replace(root_r, ''))
             os.makedirs(os.path.split(imgPath)[0], exist_ok=True)
             noisePath = os.path.join(noiseRoot, path.replace(root_r, ''))
@@ -191,8 +200,8 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
 
             l2_distance.append(l2_dis)
 
-            # cv2.imwrite(imgPath, adImg)
-            # cv2.imwrite(noisePath, noise)
+            cv2.imwrite(imgPath, adImg)
+            cv2.imwrite(noisePath, noise)
 
             online_tlwhs_att = []
             online_ids_att = []
@@ -230,9 +239,8 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
         if show_image:
             cv2.imshow('online_im', online_im)
         if save_dir is not None:
-            if opt.attack:
-                save_dir = os.path.join(imgRoot, save_dir.replace(root_r, ''))
-                os.makedirs(save_dir, exist_ok=True)
+            save_dir = os.path.join(imgRoot, save_dir.replace(root_r, ''))
+            os.makedirs(save_dir, exist_ok=True)
             cv2.imwrite(os.path.join(save_dir, '{:05d}.jpg'.format(frame_id)), online_im)
         frame_id += 1
     # save results
@@ -249,10 +257,7 @@ def main(opt, data_root='/data/MOT16/train', det_root=None, seqs=('MOT16-05',), 
     root_r += '/' if root_r[-1] != '/' else ''
     root = opt.output_dir
     root += '/' if root[-1] != '/' else ''
-    if opt.attack:
-        result_root = os.path.join(opt.output_dir, 'results', exp_name)
-    else:
-        result_root = os.path.join(data_root, '../results', exp_name)
+    result_root = os.path.join(opt.output_dir, 'results', exp_name)
     mkdir_if_missing(result_root)
     data_type = 'mot'
 
@@ -336,8 +341,14 @@ if __name__ == '__main__':
     os.environ['CUDA_VISIBLE_DEVICES'] = '0'
     opt = opts().init()
 
-    if opt.attack:
+    if opt.attack == 'single':
+        opt.output_dir = os.path.join(opt.output_dir, f'{opt.attack}_{opt.attack_id}')
+    elif opt.attack == 'multiple':
         opt.output_dir = os.path.join(opt.output_dir, opt.attack)
+    elif not opt.attack:
+        opt.output_dir = os.path.join(opt.output_dir, 'origin')
+    else:
+        raise RuntimeError()
 
     if not opt.val_mot16:
         seqs_str = '''KITTI-13
@@ -430,7 +441,7 @@ if __name__ == '__main__':
     main(opt,
          data_root=data_root,
          seqs=seqs,
-         exp_name='MOT15_val_all_dla34',
+         exp_name='all_dla34',
          show_image=False,
          save_images=True,
          save_videos=True if opt.attack else True)

@@ -1,16 +1,28 @@
 # ATTACK
 
+## RUN
+
+**origin**
+
+```shell
+python track.py mot --load_model ~/Disk/models/all_dla34.pth --conf_thres 0.6
+# images are saved in {opt.output_dir}/origin
+```
+
+**single**
+
+```shell
+python track.py mot --load_model ~/Disk/models/all_dla34.pth --conf_thres 0.6 --attack single --attack_id {attack_id}
+# images are saved in {opt.output_dir}/single_{attack_id}
+```
+
+**multiple**
+
+```shell
+python track.py mot --load_model ~/Disk/models/all_dla34.pth --conf_thres 0.6 --attack multiple
+# images are saved in {opt.output_dir}/multiple
+```
+
 ## FairMOT
 
-MOT17-02-SDP
-
-| method   | recall | precision | iou    | l2_distance | remark  |
-| -------- | ------ | --------- | ------ | ----------- | ------- |
-| fgsm     | 0.5383 | 0.8923    | 0.1827 | 42.26       |         |
-| fgsmV1   | 0.5054 | 0.9027    | 0.1704 | 42.26       |         |
-| fgsmV2   | 0.5617 | 0.9120    | 0.1829 | 42.26       |         |
-| fgsmV3   | 0.5122 | 0.9038    | 0.1717 | 42.26       |         |
-| ifgsmV2  | 0.6336 | 0.9067    | 0.1655 | 13.62       |         |
-| ifgsm_gd | 0.6490 | 0.9254    | 0.1986 | 6.36        |         |
-| ifgsm_gd | 0.6269 | 0.9233    | 0.1599 | 7.70        | min 0.2 |
 
