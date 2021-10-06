@@ -907,8 +907,11 @@ class JDETracker(object):
                 last_target_det = torch.from_numpy(strack.tlbr).cuda().float()
                 last_target_det[[0, 2]] = (last_target_det[[0, 2]] - 0.5 * W * (r_w - r_max)) / r_max
                 last_target_det[[1, 3]] = (last_target_det[[1, 3]] - 0.5 * H * (r_h - r_max)) / r_max
+        last_attack_det_center = torch.round((last_attack_det[:2] + last_attack_det[2:]) / 2)
+        last_target_det_center = torch.round((last_target_det[:2] + last_target_det[2:]) / 2)
 
         index = inds[0][remain_inds]
+        hm_index = inds[0][remain_inds]
         ae_attack_ind, ae_target_ind = attack_ind, target_ind
 
         adam_m = 0
@@ -937,7 +940,25 @@ class JDETracker(object):
                     loss_feat += torch.mm(id_feature[attack_ind:attack_ind + 1], id_feature[target_ind:target_ind + 1].T).squeeze()
             loss += loss_feat / len(id_features)
             loss -= mse(im_blob, im_blob_ori)
-            loss -= mse(outputs['hm'].view(-1)[inds[0][remain_inds]], hm_ori.view(-1)[inds[0][remain_inds]])
+            # loss -= mse(outputs['hm'].view(-1)[inds[0][remain_inds]], hm_ori.view(-1)[inds[0][remain_inds]])
+
+            if i in [10, 20, 30, 40]:
+                attack_det_center = torch.stack([hm_index[attack_ind] % W, hm_index[attack_ind] // W]).float()
+                target_det_center = torch.stack([hm_index[target_ind] % W, hm_index[target_ind] // W]).float()
+                attack_center_delta = attack_det_center - last_target_det_center
+                target_center_delta = target_det_center - last_attack_det_center
+                if torch.max(torch.abs(attack_center_delta)) > 2:
+                    attack_center_delta /= torch.max(torch.abs(attack_center_delta))
+                    attack_det_center = torch.round(attack_det_center - attack_center_delta).int()
+                    hm_index[attack_ind] = attack_det_center[0] + attack_det_center[1] * W
+                if torch.max(torch.abs(target_center_delta)) > 2:
+                    target_center_delta /= torch.max(torch.abs(target_center_delta))
+                    target_det_center = torch.round(target_det_center - target_center_delta).int()
+                    hm_index[target_ind] = target_det_center[0] + target_det_center[1] * W
+                # import pdb; pdb.set_trace()
+            loss += ((1 - outputs['hm'].view(-1).sigmoid()[hm_index]) ** 2 *
+                     torch.log(outputs['hm'].view(-1).sigmoid()[hm_index])).mean()
+
 
             # if i >= 0:
             #
@@ -995,7 +1016,7 @@ class JDETracker(object):
             noise += update_grad
 
             im_blob = torch.clip(im_blob_ori + noise, min=0, max=1).data
-            id_features, last_ad_id_features_, outputs, ae_id, index, ae_attack_ind, ae_target_ind = self.forwardFeatureSg(
+            id_features, outputs, ae_id, index, ae_attack_ind, ae_target_ind = self.forwardFeatureSg(
                 im_blob,
                 img0,
                 dets,
@@ -1015,14 +1036,11 @@ class JDETracker(object):
                 #     break
                 # else:
                 #     j += 1
-
-            if last_ad_id_features_ is not None:
-                last_ad_id_features = last_ad_id_features_
-
+            # print(torch.cat([index.view(-1, 1) // W, index.view(-1, 1) % W], dim=1))
             if i > 50:
-                # break
-                return None
-        # print(i)
+                break
+                # return None
+        print(i)
         return noise
 
     def bbox_iou_tensor(self, bboxs):
@@ -1081,12 +1099,12 @@ class JDETracker(object):
         det_ind = np.argmax(ious, axis=1)
 
         match = True
-        if ious[0, det_ind[0]] < 0.7 or ious[1, det_ind[1]] < 0.7:
+        if ious[0, det_ind[0]] < 0.6 or ious[1, det_ind[1]] < 0.6:
             dets = dets_
             inds = inds_
             remain_inds = remain_inds_
             match = False
-        # assert match
+        assert match
         id_features = []
         for i in range(3):
             for j in range(3):
@@ -1101,7 +1119,7 @@ class JDETracker(object):
         last_ad_id_features = None
 
         if not match:
-            return id_features, None, output, ae_attack_id, inds[0, remain_inds], attack_ind, target_ind
+            return id_features, output, ae_attack_id, inds[0, remain_inds], attack_ind, target_ind
 
         ae_attack_ind = det_ind[0]
         ae_target_ind = det_ind[1]
@@ -1147,7 +1165,7 @@ class JDETracker(object):
                 # pdb.set_trace()
                 # if ae_attack_id != attack_id:
                 #     import pdb; pdb.set_trace()
-                return id_features_, last_ad_id_features, output, ae_attack_id, inds[0, remain_inds], ae_attack_ind, ae_target_ind
+                return id_features_, output, ae_attack_id, inds[0, remain_inds], ae_attack_ind, ae_target_ind
 
         ''' Step 3: Second association, with IOU'''
         for i, idet in enumerate(u_detection):
@@ -1166,7 +1184,7 @@ class JDETracker(object):
                 ae_attack_id = track.track_id
                 # if ae_attack_id != attack_id:
                 #     import pdb; pdb.set_trace()
-                return id_features_, last_ad_id_features, output, ae_attack_id, inds[0, remain_inds], ae_attack_ind, ae_target_ind
+                return id_features_, output, ae_attack_id, inds[0, remain_inds], ae_attack_ind, ae_target_ind
 
 
         '''Deal with unconfirmed tracks, usually tracks with only one beginning frame'''
@@ -1183,9 +1201,9 @@ class JDETracker(object):
                 ae_attack_id = track.track_id
                 if ae_attack_id != attack_id:
                     import pdb; pdb.set_trace()
-                return id_features_, last_ad_id_features, output, ae_attack_id, inds[0, remain_inds], ae_attack_ind, ae_target_ind
+                return id_features_, output, ae_attack_id, inds[0, remain_inds], ae_attack_ind, ae_target_ind
 
-        return id_features_, last_ad_id_features, output, ae_attack_id, inds[0, remain_inds], ae_attack_ind, ae_target_ind
+        return id_features_, output, ae_attack_id, inds[0, remain_inds], ae_attack_ind, ae_target_ind
 
     def CheckFit(self, dets, id_feature, attack_id, attack_ind, target_id, target_ind):
         attack_det = dets[attack_ind][:4]
@@ -1242,11 +1260,11 @@ class JDETracker(object):
             elif track.track_id == target_id:
                 ad_target_det = det.tlbr
 
-        if ad_attack_det is None or ad_target_det is None:
+        if ad_attack_det is None:
             return False
 
-        ori_dets = np.array([attack_det, target_det])
-        ad_dets = np.array([ad_attack_det, ad_target_det])
+        ori_dets = np.array([attack_det])
+        ad_dets = np.array([ad_attack_det])
 
         ious = bbox_ious(ori_dets.astype(np.float), ad_dets.astype(np.float))
         if ious[0, 0] > 0.9:
@@ -1690,7 +1708,7 @@ class JDETracker(object):
         logger.debug('Lost: {}'.format([track.track_id for track in lost_stracks]))
         logger.debug('Removed: {}'.format([track.track_id for track in removed_stracks]))
 
-        attack_id = 2
+        attack_id = 19
 
         attack = self.opt.attack
         noise = torch.zeros_like(im_blob)
