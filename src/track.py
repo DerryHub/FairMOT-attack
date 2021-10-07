@@ -18,6 +18,7 @@ import numpy as np
 import torch
 
 from tracker.multitracker import JDETracker
+from tracker.basetrack import BaseTrack
 from tracking_utils import visualization as vis
 from tracking_utils.log import logger
 from tracking_utils.timer import Timer
@@ -29,6 +30,9 @@ from opts import opts
 
 from cython_bbox import bbox_overlaps as bbox_ious
 from scipy.optimize import linear_sum_assignment
+
+import copy
+from cython_bbox import bbox_overlaps as bbox_ious
 
 class TrackObject:
     def __init__(self, result_lines, id):
@@ -160,12 +164,28 @@ def evaluate_attack(result_filename_ori, result_filename_att):
 
 
 def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None, show_image=True, frame_rate=30):
+    BaseTrack.init()
+    need_attack_ids = set([])
+    suc_attacked_ids = set([])
+    frequency_ids = {}
+    trackers_dic = {}
+    suc_frequency_ids = {}
+
+    tracked_stracks = []
+    lost_stracks = []
+    removed_stracks = []
+    ad_last_info = {}
+
+    track_id = {'track_id': 1}
+    sg_track_ids = {}
+
     if save_dir:
         mkdir_if_missing(save_dir)
     tracker = JDETracker(opt, frame_rate=frame_rate)
     timer = Timer()
     results = []
     results_att = []
+    results_att_sg = {}
     frame_id = 0
     root_r = opt.data_dir
     root_r += '/' if root_r[-1] != '/' else ''
@@ -174,23 +194,104 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
     imgRoot = os.path.join(root, 'image')
     noiseRoot = os.path.join(root, 'noise')
     l2_distance = []
+    l2_distance_sg = {}
     for path, img, img0 in dataloader:
         if frame_id % 20 == 0:
             logger.info('Processing frame {} ({:.2f} fps)'.format(frame_id, 1. / max(1e-5, timer.average_time)))
+
+        sg_track_outputs = {}
 
         # run tracking
         timer.tic()
         blob = torch.from_numpy(img).cuda().unsqueeze(0)
 
         if opt.attack:
-            if opt.attack == 'single':
-                online_targets_ori, output_stracks_att, adImg, noise, l2_dis = tracker.update_attack_sg(blob, img0,
-                                                                                                     name=path.replace(
-                                                                                                         root_r, ''))
+            if opt.attack == 'single' and opt.attack_id == -1:
+                online_targets_ori = tracker.update(blob, img0, name=path.replace(root_r, ''), track_id=track_id)
+                dets = []
+                ids = []
+
+                for strack in online_targets_ori:
+                    if strack.track_id not in frequency_ids:
+                        frequency_ids[strack.track_id] = 0
+                    frequency_ids[strack.track_id] += 1
+                    if frequency_ids[strack.track_id] > tracker.FRAME_THR:
+                        ids.append(strack.track_id)
+                        dets.append(strack.curr_tlbr.reshape(1, -1))
+                if len(ids) > 0:
+                    dets = np.concatenate(dets).astype(np.float64)
+                    ious = bbox_ious(dets, dets)
+                    ious[range(len(dets)), range(len(dets))] = 0
+                    for i in range(len(dets)):
+                        for j in range(len(dets)):
+                            if ious[i, j] > tracker.ATTACK_IOU_THR:
+                                need_attack_ids.add(ids[i])
+
+                for attack_id in need_attack_ids:
+                    if attack_id in suc_attacked_ids:
+                        continue
+                    if attack_id not in trackers_dic:
+                        trackers_dic[attack_id] = JDETracker(
+                            opt,
+                            frame_rate=frame_rate,
+                            tracked_stracks=tracked_stracks,
+                            lost_stracks=lost_stracks,
+                            removed_stracks=removed_stracks,
+                            frame_id=frame_id,
+                            ad_last_info=ad_last_info
+                        )
+                        sg_track_ids[attack_id] = {
+                            'origin': {'track_id': 1},
+                            'attack': {'track_id': 1}
+                        }
+                    _, output_stracks_att, adImg, noise, l2_dis, suc = trackers_dic[attack_id].update_attack_sg(
+                        blob,
+                        img0,
+                        name=path.replace(root_r, ''),
+                        attack_id=attack_id,
+                        track_id=sg_track_ids[attack_id]
+                    )
+                    sg_track_outputs[attack_id] = {}
+                    sg_track_outputs[attack_id]['output_stracks_att'] = output_stracks_att
+                    sg_track_outputs[attack_id]['adImg'] = adImg
+                    sg_track_outputs[attack_id]['noise'] = noise
+                    if attack_id not in results_att_sg:
+                        results_att_sg[attack_id] = []
+                    if attack_id not in l2_distance_sg:
+                        l2_distance_sg[attack_id] = []
+                    if l2_dis is not None:
+                        l2_distance_sg[attack_id].append(l2_dis)
+                    if suc == 1:
+                        suc_frequency_ids[attack_id] = 1
+                    elif suc == 2:
+                        suc_frequency_ids.pop(attack_id, None)
+                    elif attack_id in suc_frequency_ids:
+                        suc_frequency_ids[attack_id] += 1
+                        if suc_frequency_ids[attack_id] > 20:
+                            suc_attacked_ids.add(attack_id)
+
+                tracked_stracks = copy.deepcopy(tracker.tracked_stracks)
+                lost_stracks = copy.deepcopy(tracker.lost_stracks)
+                removed_stracks = copy.deepcopy(tracker.removed_stracks)
+                ad_last_info = copy.deepcopy(tracker.ad_last_info)
+            elif opt.attack == 'single':
+                assert opt.attack_id > 0
+                online_targets_ori, output_stracks_att, adImg, noise, l2_dis, suc = tracker.update_attack_sg(
+                    blob,
+                    img0,
+                    name=path.replace(root_r, ''),
+                    attack_id=opt.attack_id
+                )
+                if l2_dis is not None:
+                    l2_distance.append(l2_dis)
             elif opt.attack == 'multiple':
-                online_targets_ori, output_stracks_att, adImg, noise, l2_dis = tracker.update_attack_mt(blob, img0,
-                                                                                                     name=path.replace(
-                                                                                                         root_r, ''))
+                online_targets_ori, output_stracks_att, adImg, noise, l2_dis = tracker.update_attack_mt(
+                    blob,
+                    img0,
+                    name=path.replace(root_r, '')
+                )
+                if l2_dis is not None:
+                    l2_distance.append(l2_dis)
             else:
                 raise RuntimeError()
             imgPath = os.path.join(imgRoot, path.replace(root_r, ''))
@@ -198,21 +299,40 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
             noisePath = os.path.join(noiseRoot, path.replace(root_r, ''))
             os.makedirs(os.path.split(noisePath)[0], exist_ok=True)
 
-            l2_distance.append(l2_dis)
+            # l2_distance.append(l2_dis)
 
-            cv2.imwrite(imgPath, adImg)
-            cv2.imwrite(noisePath, noise)
+            if opt.attack == 'single' and opt.attack_id == -1:
+                for key in sg_track_outputs.keys():
+                    cv2.imwrite(imgPath.replace('.jpg', f'_{key}.jpg'), sg_track_outputs[key]['adImg'])
+                    if sg_track_outputs[key]['noise'] is not None:
+                        cv2.imwrite(noisePath.replace('.jpg', f'_{key}.jpg'), sg_track_outputs[key]['noise'])
+                    online_tlwhs_att = []
+                    online_ids_att = []
+                    for t in sg_track_outputs[key]['output_stracks_att']:
+                        tlwh = t.tlwh
+                        tid = t.track_id
+                        vertical = tlwh[2] / tlwh[3] > 1.6
+                        if tlwh[2] * tlwh[3] > opt.min_box_area and not vertical:
+                            online_tlwhs_att.append(tlwh)
+                            online_ids_att.append(tid)
+                    results_att_sg[key].append((frame_id + 1, online_tlwhs_att, online_ids_att))
+                    sg_track_outputs[key]['online_tlwhs_att'] = online_tlwhs_att
+                    sg_track_outputs[key]['online_ids_att'] = online_ids_att
+            else:
+                cv2.imwrite(imgPath, adImg)
+                if noise is not None:
+                    cv2.imwrite(noisePath, noise)
 
-            online_tlwhs_att = []
-            online_ids_att = []
-            for t in output_stracks_att:
-                tlwh = t.tlwh
-                tid = t.track_id
-                vertical = tlwh[2] / tlwh[3] > 1.6
-                if tlwh[2] * tlwh[3] > opt.min_box_area and not vertical:
-                    online_tlwhs_att.append(tlwh)
-                    online_ids_att.append(tid)
-            results_att.append((frame_id + 1, online_tlwhs_att, online_ids_att))
+                online_tlwhs_att = []
+                online_ids_att = []
+                for t in output_stracks_att:
+                    tlwh = t.tlwh
+                    tid = t.track_id
+                    vertical = tlwh[2] / tlwh[3] > 1.6
+                    if tlwh[2] * tlwh[3] > opt.min_box_area and not vertical:
+                        online_tlwhs_att.append(tlwh)
+                        online_ids_att.append(tid)
+                results_att.append((frame_id + 1, online_tlwhs_att, online_ids_att))
         else:
             online_targets_ori = tracker.update(blob, img0, name=path.replace(root_r, ''))
 
@@ -229,24 +349,48 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
         # save results
         results.append((frame_id + 1, online_tlwhs, online_ids))
         if show_image or save_dir is not None:
-            if opt.attack:
+            if opt.attack == 'single' and opt.attack_id == -1:
+                for key in sg_track_outputs.keys():
+                    img0 = sg_track_outputs[key]['adImg'].astype(np.uint8)
+                    sg_track_outputs[key]['online_im'] = vis.plot_tracking(
+                        img0,
+                        sg_track_outputs[key]['online_tlwhs_att'],
+                        sg_track_outputs[key]['online_ids_att'],
+                        frame_id=frame_id,
+                        fps=1. / timer.average_time
+                    )
+            elif opt.attack:
                 img0 = adImg.astype(np.uint8)
                 online_im = vis.plot_tracking(img0, online_tlwhs_att, online_ids_att, frame_id=frame_id,
                                               fps=1. / timer.average_time)
             else:
                 online_im = vis.plot_tracking(img0, online_tlwhs, online_ids, frame_id=frame_id,
                                               fps=1. / timer.average_time)
-        if show_image:
-            cv2.imshow('online_im', online_im)
+        # if show_image:
+        #     cv2.imshow('online_im', online_im)
         if save_dir is not None:
             save_dir = os.path.join(imgRoot, save_dir.replace(root_r, ''))
             os.makedirs(save_dir, exist_ok=True)
-            cv2.imwrite(os.path.join(save_dir, '{:05d}.jpg'.format(frame_id)), online_im)
+            if opt.attack == 'single' and opt.attack_id == -1:
+                for key in sg_track_outputs.keys():
+                    cv2.imwrite(os.path.join(save_dir, '{:05d}_{}.jpg'.format(frame_id, key)), sg_track_outputs[key]['online_im'])
+            else:
+                cv2.imwrite(os.path.join(save_dir, '{:05d}.jpg'.format(frame_id)), online_im)
         frame_id += 1
+    suc_attacked_ids.update(set(suc_frequency_ids.keys()))
     # save results
     write_results(result_filename, results, data_type)
-    if opt.attack:
+    if opt.attack == 'single' and opt.attack_id == -1:
+        for key in results_att_sg.keys():
+            write_results(result_filename.replace('.txt', f'_attack_{key}.txt'), results_att_sg[key], data_type)
+    elif opt.attack:
         write_results(result_filename.replace('.txt', '_attack.txt'), results_att, data_type)
+    if opt.attack == 'single' and opt.attack_id == -1:
+        print('@' * 50 + ' single attack accuracy ' + '@' * 50)
+        print(f'All attacked ids is {need_attack_ids}')
+        print(f'All successfully attacked ids is {suc_attacked_ids}')
+        print(f'All unsuccessfully attacked ids is {need_attack_ids - suc_attacked_ids}')
+        print(f'The accuracy is {round(100 * len(suc_attacked_ids) / len(need_attack_ids), 2)}%')
     return frame_id, timer.average_time, timer.calls, l2_distance
 
 
@@ -291,57 +435,59 @@ def main(opt, data_root='/data/MOT16/train', det_root=None, seqs=('MOT16-05',), 
         # eval
         logger.info('Evaluate seq: {}'.format(seq))
 
-        if opt.attack:
-            mean_recall, mean_precision, mean_iou = evaluate_attack(result_filename,
-                                                                    result_filename.replace('.txt', '_attack.txt'))
-            logger.info(f'mean_recall: {mean_recall}\tmean_precision: {mean_precision}\tmean_iou: {mean_iou}\t'
-                        f'mean_l2_distance: {sum(l2_distance) / len(l2_distance)}\n')
+        # if opt.attack:
+        #     mean_recall, mean_precision, mean_iou = evaluate_attack(result_filename,
+        #                                                             result_filename.replace('.txt', '_attack.txt'))
+        #     logger.info(f'mean_recall: {mean_recall}\tmean_precision: {mean_precision}\tmean_iou: {mean_iou}\t'
+        #                 f'mean_l2_distance: {sum(l2_distance) / len(l2_distance)}\n')
 
-        accs.append(evaluator.eval_file(result_filename))
-        if opt.attack:
-            accs_att.append(evaluator.eval_file(result_filename.replace('.txt', '_attack.txt')))
-        if save_videos:
-            if opt.attack:
-                output_dir = output_dir.replace(root_r, os.path.join(root, 'image/'))
-            output_video_path = osp.join(output_dir, '{}.mp4'.format(seq))
-            cmd_str = 'ffmpeg -f image2 -i {}/%05d.jpg -c:v copy {}'.format(output_dir, output_video_path)
-            os.system(cmd_str)
-    timer_avgs = np.asarray(timer_avgs)
-    timer_calls = np.asarray(timer_calls)
-    all_time = np.dot(timer_avgs, timer_calls)
-    avg_time = all_time / np.sum(timer_calls)
-    logger.info('Time elapsed: {:.2f} seconds, FPS: {:.2f}'.format(all_time, 1.0 / avg_time))
-
-    # get summary
-    metrics = mm.metrics.motchallenge_metrics
-    mh = mm.metrics.create()
-    # import pdb; pdb.set_trace()
-    summary = Evaluator.get_summary(accs, seqs, metrics)
-    strsummary = mm.io.render_summary(
-        summary,
-        formatters=mh.formatters,
-        namemap=mm.io.motchallenge_metric_names
-    )
-    print('=' * 50 + 'origin' + '=' * 50)
-    print(strsummary)
-    Evaluator.save_summary(summary, os.path.join(result_root, 'summary_{}.xlsx'.format(exp_name)))
-    if opt.attack:
-        summary_att = Evaluator.get_summary(accs_att, seqs, metrics)
-        strsummary_att = mm.io.render_summary(
-            summary_att,
-            formatters=mh.formatters,
-            namemap=mm.io.motchallenge_metric_names
-        )
-        print('=' * 50 + 'attack' + '=' * 50)
-        print(strsummary_att)
-        Evaluator.save_summary(summary_att, os.path.join(result_root, 'summary_{}_attack.xlsx'.format(exp_name)))
+        # accs.append(evaluator.eval_file(result_filename))
+        # if opt.attack:
+        #     accs_att.append(evaluator.eval_file(result_filename.replace('.txt', '_attack.txt')))
+        # if save_videos:
+        #     if opt.attack:
+        #         output_dir = output_dir.replace(root_r, os.path.join(root, 'image/'))
+        #     output_video_path = osp.join(output_dir, '{}.mp4'.format(seq))
+        #     cmd_str = 'ffmpeg -f image2 -i {}/%05d.jpg -c:v copy {}'.format(output_dir, output_video_path)
+        #     os.system(cmd_str)
+    # timer_avgs = np.asarray(timer_avgs)
+    # timer_calls = np.asarray(timer_calls)
+    # all_time = np.dot(timer_avgs, timer_calls)
+    # avg_time = all_time / np.sum(timer_calls)
+    # logger.info('Time elapsed: {:.2f} seconds, FPS: {:.2f}'.format(all_time, 1.0 / avg_time))
+    #
+    # # get summary
+    # metrics = mm.metrics.motchallenge_metrics
+    # mh = mm.metrics.create()
+    # # import pdb; pdb.set_trace()
+    # summary = Evaluator.get_summary(accs, seqs, metrics)
+    # strsummary = mm.io.render_summary(
+    #     summary,
+    #     formatters=mh.formatters,
+    #     namemap=mm.io.motchallenge_metric_names
+    # )
+    # print('=' * 50 + 'origin' + '=' * 50)
+    # print(strsummary)
+    # Evaluator.save_summary(summary, os.path.join(result_root, 'summary_{}.xlsx'.format(exp_name)))
+    # if opt.attack:
+    #     summary_att = Evaluator.get_summary(accs_att, seqs, metrics)
+    #     strsummary_att = mm.io.render_summary(
+    #         summary_att,
+    #         formatters=mh.formatters,
+    #         namemap=mm.io.motchallenge_metric_names
+    #     )
+    #     print('=' * 50 + 'attack' + '=' * 50)
+    #     print(strsummary_att)
+    #     Evaluator.save_summary(summary_att, os.path.join(result_root, 'summary_{}_attack.xlsx'.format(exp_name)))
 
 
 if __name__ == '__main__':
     os.environ['CUDA_VISIBLE_DEVICES'] = '0'
     opt = opts().init()
 
-    if opt.attack == 'single':
+    if opt.attack == 'single' and opt.attack_id == -1:
+        opt.output_dir = os.path.join(opt.output_dir, f'{opt.attack}_all')
+    elif opt.attack == 'single':
         opt.output_dir = os.path.join(opt.output_dir, f'{opt.attack}_{opt.attack_id}')
     elif opt.attack == 'multiple':
         opt.output_dir = os.path.join(opt.output_dir, opt.attack)

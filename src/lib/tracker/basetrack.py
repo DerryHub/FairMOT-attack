@@ -33,6 +33,11 @@ class BaseTrack(object):
     # multi-camera
     location = (np.inf, np.inf)
 
+    @staticmethod
+    def init():
+        BaseTrack._count = 0
+        BaseTrack._count_ = 0
+
     @property
     def end_frame(self):
         return self.frame_id

@@ -91,6 +91,8 @@ class STrack(BaseTrack):
         self.features = deque([], maxlen=buffer_size)
         self.alpha = 0.9
 
+        self.curr_tlbr = self.tlwh_to_tlbr(self._tlwh)
+
         self.det_dict = {}
 
     def update_features_ad(self, feat):
@@ -143,10 +145,14 @@ class STrack(BaseTrack):
                 stracks[i].mean = mean
                 stracks[i].covariance = cov
 
-    def activate(self, kalman_filter, frame_id):
+    def activate(self, kalman_filter, frame_id, track_id=None):
         """Start a new tracklet"""
         self.kalman_filter = kalman_filter
-        self.track_id = self.next_id()
+        if track_id:
+            self.track_id = track_id['track_id']
+            track_id['track_id'] += 1
+        else:
+            self.track_id = self.next_id()
         self.mean, self.covariance = self.kalman_filter.initiate(self.tlwh_to_xyah(self._tlwh))
 
         self.tracklet_len = 0
@@ -155,10 +161,14 @@ class STrack(BaseTrack):
         self.frame_id = frame_id
         self.start_frame = frame_id
 
-    def activate_(self, kalman_filter, frame_id):
+    def activate_(self, kalman_filter, frame_id, track_id=None):
         """Start a new tracklet"""
         self.kalman_filter = kalman_filter
-        self.track_id = self.next_id_()
+        if track_id:
+            self.track_id = track_id['track_id']
+            track_id['track_id'] += 1
+        else:
+            self.track_id = self.next_id_()
         self.mean, self.covariance = self.kalman_filter.initiate(self.tlwh_to_xyah(self._tlwh))
 
         self.tracklet_len = 0
@@ -168,6 +178,7 @@ class STrack(BaseTrack):
         self.start_frame = frame_id
 
     def re_activate(self, new_track, frame_id, new_id=False):
+        self.curr_tlbr = self.tlwh_to_tlbr(new_track.tlwh)
         self.mean, self.covariance = self.kalman_filter.update(
             self.mean, self.covariance, self.tlwh_to_xyah(new_track.tlwh)
         )
@@ -182,6 +193,7 @@ class STrack(BaseTrack):
             self.track_id = self.next_id()
 
     def re_activate_(self, new_track, frame_id, new_id=False):
+        self.curr_tlbr = self.tlwh_to_tlbr(new_track.tlwh)
         self.mean, self.covariance = self.kalman_filter.update(
             self.mean, self.covariance, self.tlwh_to_xyah(new_track.tlwh)
         )
@@ -207,6 +219,7 @@ class STrack(BaseTrack):
         self.tracklet_len += 1
         self.exist_len += 1
 
+        self.curr_tlbr = self.tlwh_to_tlbr(new_track.tlwh)
         new_tlwh = new_track.tlwh
         self.mean, self.covariance = self.kalman_filter.update(
             self.mean, self.covariance, self.tlwh_to_xyah(new_tlwh))
@@ -273,7 +286,16 @@ class STrack(BaseTrack):
 
 
 class JDETracker(object):
-    def __init__(self, opt, frame_rate=30):
+    def __init__(
+            self,
+            opt,
+            frame_rate=30,
+            tracked_stracks=[],
+            lost_stracks=[],
+            removed_stracks=[],
+            frame_id=0,
+            ad_last_info={}
+    ):
         self.opt = opt
         if opt.gpus[0] >= 0:
             opt.device = torch.device('cuda')
@@ -285,35 +307,35 @@ class JDETracker(object):
         self.model = self.model.to(opt.device)
         self.model.eval()
 
-        self.tracked_stracks = []  # type: list[STrack]
-        self.lost_stracks = []  # type: list[STrack]
-        self.removed_stracks = []  # type: list[STrack]
+        self.tracked_stracks = copy.deepcopy(tracked_stracks)  # type: list[STrack]
+        self.lost_stracks = copy.deepcopy(lost_stracks)  # type: list[STrack]
+        self.removed_stracks = copy.deepcopy(removed_stracks)  # type: list[STrack]
 
-        self.tracked_stracks_ad = []  # type: list[STrack]
-        self.lost_stracks_ad = []  # type: list[STrack]
-        self.removed_stracks_ad = []  # type: list[STrack]
+        self.tracked_stracks_ad = copy.deepcopy(tracked_stracks)  # type: list[STrack]
+        self.lost_stracks_ad = copy.deepcopy(lost_stracks)  # type: list[STrack]
+        self.removed_stracks_ad = copy.deepcopy(removed_stracks)  # type: list[STrack]
 
-        self.tracked_stracks_ = []  # type: list[STrack]
-        self.lost_stracks_ = []  # type: list[STrack]
-        self.removed_stracks_ = []  # type: list[STrack]
+        self.tracked_stracks_ = copy.deepcopy(tracked_stracks)  # type: list[STrack]
+        self.lost_stracks_ = copy.deepcopy(lost_stracks)  # type: list[STrack]
+        self.removed_stracks_ = copy.deepcopy(removed_stracks)  # type: list[STrack]
 
-        self.frame_id = 0
-        self.frame_id_ = 0
-        self.frame_id_ad = 0
+        self.frame_id = frame_id
+        self.frame_id_ = frame_id
+        self.frame_id_ad = frame_id
 
         self.det_thresh = opt.conf_thres
         self.buffer_size = int(frame_rate / 30.0 * opt.track_buffer)
         self.max_time_lost = self.buffer_size
         self.max_per_image = 128
 
-        self.mean = np.array(opt.mean, dtype=np.float32).reshape(1, 1, 3)
-        self.std = np.array(opt.std, dtype=np.float32).reshape(1, 1, 3)
-
-        self.mean_ad = np.array(opt.mean, dtype=np.float32).reshape(1, 1, 3)
-        self.std_ad = np.array(opt.std, dtype=np.float32).reshape(1, 1, 3)
-
-        self.mean_ = np.array(opt.mean, dtype=np.float32).reshape(1, 1, 3)
-        self.std_ = np.array(opt.std, dtype=np.float32).reshape(1, 1, 3)
+        # self.mean = np.array(opt.mean, dtype=np.float32).reshape(1, 1, 3)
+        # self.std = np.array(opt.std, dtype=np.float32).reshape(1, 1, 3)
+        #
+        # self.mean_ad = np.array(opt.mean, dtype=np.float32).reshape(1, 1, 3)
+        # self.std_ad = np.array(opt.std, dtype=np.float32).reshape(1, 1, 3)
+        #
+        # self.mean_ = np.array(opt.mean, dtype=np.float32).reshape(1, 1, 3)
+        # self.std_ = np.array(opt.std, dtype=np.float32).reshape(1, 1, 3)
 
         self.kalman_filter = KalmanFilter()
         self.kalman_filter_ad = KalmanFilter()
@@ -325,8 +347,10 @@ class JDETracker(object):
         self.low_iou_ids = set([])
         self.ATTACK_IOU_THR = 0.4
         self.attack_iou_thr = self.ATTACK_IOU_THR
-        self.ad_last_info = None
+        self.ad_last_info = copy.deepcopy(ad_last_info)
         self.FRAME_THR = 10
+
+        self.temp_i = 0
 
     def post_process(self, dets, meta):
         dets = dets.detach().cpu().numpy()
@@ -788,12 +812,12 @@ class JDETracker(object):
                 last_ad_id_feature = torch.from_numpy(last_ad_id_features[attack_ind]).unsqueeze(0).cuda()
                 sim_1 = torch.mm(id_feature[attack_ind:attack_ind + 1], last_ad_id_feature.T).squeeze()
                 sim_2 = torch.mm(id_feature[target_ind:target_ind + 1], last_ad_id_feature.T).squeeze()
-                loss += sim_2 - sim_1
+                loss += sim_2 - sim_1 # min(sim_2 - sim_1, 0.2)
             if last_ad_id_features[target_ind] is not None:
                 last_ad_id_feature = torch.from_numpy(last_ad_id_features[target_ind]).unsqueeze(0).cuda()
                 sim_1 = torch.mm(id_feature[target_ind:target_ind + 1], last_ad_id_feature.T).squeeze()
                 sim_2 = torch.mm(id_feature[attack_ind:attack_ind + 1], last_ad_id_feature.T).squeeze()
-                loss += sim_2 - sim_1
+                loss += sim_2 - sim_1 # min(sim_2 - sim_1, 0.2)
             if last_ad_id_features[attack_ind] is None and last_ad_id_features[target_ind] is None:
                 loss += torch.mm(id_feature[attack_ind:attack_ind + 1], id_feature[target_ind:target_ind + 1].T).squeeze()
             loss -= mse(im_blob, im_blob_ori)
@@ -896,8 +920,7 @@ class JDETracker(object):
         noise = torch.zeros_like(im_blob)
         im_blob_ori = im_blob.clone().data
         outputs = outputs_ori
-        i = 0
-        j = -1
+
         last_ad_id_features = [None for _ in range(len(id_features[0]))]
         strack_pool = copy.deepcopy(last_info['last_strack_pool'])
         last_attack_det = None
@@ -914,13 +937,19 @@ class JDETracker(object):
                 last_target_det = torch.from_numpy(strack.tlbr).cuda().float()
                 last_target_det[[0, 2]] = (last_target_det[[0, 2]] - 0.5 * W * (r_w - r_max)) / r_max
                 last_target_det[[1, 3]] = (last_target_det[[1, 3]] - 0.5 * H * (r_h - r_max)) / r_max
-        last_attack_det_center = torch.round((last_attack_det[:2] + last_attack_det[2:]) / 2)
-        last_target_det_center = torch.round((last_target_det[:2] + last_target_det[2:]) / 2)
+        last_attack_det_center = torch.round((last_attack_det[:2] + last_attack_det[2:]) / 2) if last_attack_det is not None else None
+        last_target_det_center = torch.round((last_target_det[:2] + last_target_det[2:]) / 2) if last_target_det is not None else None
 
         hm_index = inds[0][remain_inds]
 
+        for i in range(len(id_features)):
+            id_features[i] = id_features[i][[attack_ind, target_ind]]
+
         adam_m = 0
         adam_v = 0
+
+        i = 0
+        suc = True
         while True:
             i += 1
             loss = 0
@@ -929,32 +958,44 @@ class JDETracker(object):
             # id_feature = id_features[4]
                 if last_ad_id_features[attack_ind] is not None:
                     last_ad_id_feature = torch.from_numpy(last_ad_id_features[attack_ind]).unsqueeze(0).cuda()
-                    sim_1 = torch.mm(id_feature[attack_ind:attack_ind + 1], last_ad_id_feature.T).squeeze()
-                    sim_2 = torch.mm(id_feature[target_ind:target_ind + 1], last_ad_id_feature.T).squeeze()
+                    sim_1 = torch.mm(id_feature[0:0 + 1], last_ad_id_feature.T).squeeze()
+                    sim_2 = torch.mm(id_feature[1:1 + 1], last_ad_id_feature.T).squeeze()
                     loss_feat += sim_2 - sim_1
                 if last_ad_id_features[target_ind] is not None:
                     last_ad_id_feature = torch.from_numpy(last_ad_id_features[target_ind]).unsqueeze(0).cuda()
-                    sim_1 = torch.mm(id_feature[target_ind:target_ind + 1], last_ad_id_feature.T).squeeze()
-                    sim_2 = torch.mm(id_feature[attack_ind:attack_ind + 1], last_ad_id_feature.T).squeeze()
+                    sim_1 = torch.mm(id_feature[1:1 + 1], last_ad_id_feature.T).squeeze()
+                    sim_2 = torch.mm(id_feature[0:0 + 1], last_ad_id_feature.T).squeeze()
                     loss_feat += sim_2 - sim_1
                 if last_ad_id_features[attack_ind] is None and last_ad_id_features[target_ind] is None:
-                    loss_feat += torch.mm(id_feature[attack_ind:attack_ind + 1], id_feature[target_ind:target_ind + 1].T).squeeze()
+                    loss_feat += torch.mm(id_feature[0:0 + 1], id_feature[1:1 + 1].T).squeeze()
             loss += loss_feat / len(id_features)
             loss -= mse(im_blob, im_blob_ori)
 
             if i in [10, 20, 30, 40]:
                 attack_det_center = torch.stack([hm_index[attack_ind] % W, hm_index[attack_ind] // W]).float()
                 target_det_center = torch.stack([hm_index[target_ind] % W, hm_index[target_ind] // W]).float()
-                attack_center_delta = attack_det_center - last_target_det_center
-                target_center_delta = target_det_center - last_attack_det_center
-                if torch.max(torch.abs(attack_center_delta)) > 2:
-                    attack_center_delta /= torch.max(torch.abs(attack_center_delta))
-                    attack_det_center = torch.round(attack_det_center - attack_center_delta).int()
-                    hm_index[attack_ind] = attack_det_center[0] + attack_det_center[1] * W
-                if torch.max(torch.abs(target_center_delta)) > 2:
-                    target_center_delta /= torch.max(torch.abs(target_center_delta))
-                    target_det_center = torch.round(target_det_center - target_center_delta).int()
-                    hm_index[target_ind] = target_det_center[0] + target_det_center[1] * W
+                if last_target_det_center is not None:
+                    attack_center_delta = attack_det_center - last_target_det_center
+                    if torch.max(torch.abs(attack_center_delta)) > 2:
+                        attack_center_delta /= torch.max(torch.abs(attack_center_delta))
+                        attack_det_center = torch.round(attack_det_center - attack_center_delta).int()
+                        hm_index[attack_ind] = attack_det_center[0] + attack_det_center[1] * W
+                if last_attack_det_center is not None:
+                    target_center_delta = target_det_center - last_attack_det_center
+                    if torch.max(torch.abs(target_center_delta)) > 2:
+                        target_center_delta /= torch.max(torch.abs(target_center_delta))
+                        target_det_center = torch.round(target_det_center - target_center_delta).int()
+                        hm_index[target_ind] = target_det_center[0] + target_det_center[1] * W
+                # attack_center_delta = attack_det_center - last_target_det_center
+                # target_center_delta = target_det_center - last_attack_det_center
+                # if torch.max(torch.abs(attack_center_delta)) > 2:
+                #     attack_center_delta /= torch.max(torch.abs(attack_center_delta))
+                #     attack_det_center = torch.round(attack_det_center - attack_center_delta).int()
+                #     hm_index[attack_ind] = attack_det_center[0] + attack_det_center[1] * W
+                # if torch.max(torch.abs(target_center_delta)) > 2:
+                #     target_center_delta /= torch.max(torch.abs(target_center_delta))
+                #     target_det_center = torch.round(target_det_center - target_center_delta).int()
+                #     hm_index[target_ind] = target_det_center[0] + target_det_center[1] * W
 
             loss += ((1 - outputs['hm'].view(-1).sigmoid()[hm_index]) ** 2 *
                      torch.log(outputs['hm'].view(-1).sigmoid()[hm_index])).mean()
@@ -974,7 +1015,7 @@ class JDETracker(object):
             noise += update_grad
 
             im_blob = torch.clip(im_blob_ori + noise, min=0, max=1).data
-            id_features, outputs, ae_id = self.forwardFeatureSg(
+            id_features_, outputs_, ae_id = self.forwardFeatureSg(
                 im_blob,
                 img0,
                 dets,
@@ -986,19 +1027,18 @@ class JDETracker(object):
                 target_ind,
                 last_info
             )
+            if id_features_ is not None:
+                id_features = id_features_
+            if outputs_ is not None:
+                outputs = outputs_
             if ae_id != attack_id and ae_id is not None:
                 break
-                # if j == -1:
-                #     j = 0
-                # elif j == 3:
-                #     break
-                # else:
-                #     j += 1
-            # print(torch.cat([index.view(-1, 1) // W, index.view(-1, 1) % W], dim=1))
+
             if i > 50:
-                # break
-                return None, -1
-        return noise, i
+                suc = False
+                break
+                # return None, -1
+        return noise, i, suc
 
     def ifgsm_adam_mt(
             self,
@@ -1220,18 +1260,24 @@ class JDETracker(object):
         ae_attack_id = None
 
         if not match:
+            for i in range(len(id_features)):
+                id_features[i] = id_features[i][[attack_ind, target_ind]]
             return id_features, output, ae_attack_id
 
         ae_attack_ind = det_ind[0]
         ae_target_ind = det_ind[1]
 
-        index = list(range(len(id_features[0])))
-        index[attack_ind] = ae_attack_ind
-        index[target_ind] = ae_target_ind
+        id_features_ = [None for _ in range(len(id_features))]
+        for i in range(len(id_features)):
+            id_features_[i] = id_features[i][[ae_attack_ind, ae_target_ind]]
 
-        id_features_ = [torch.zeros_like(id_features[0]) for _ in range(len(id_features))]
-        for i in range(9):
-            id_features_[i] = id_features[i][index]
+        # index = list(range(len(id_features[0])))
+        # index[attack_ind] = ae_attack_ind
+        # index[target_ind] = ae_target_ind
+        #
+        # id_features_ = [None for _ in range(len(id_features))]
+        # for i in range(9):
+        #     id_features_[i] = id_features[i][index]
 
         id_feature = _tranpose_and_gather_feat_expand(id_feature, inds)
         id_feature = id_feature.squeeze(0)
@@ -1787,6 +1833,9 @@ class JDETracker(object):
 
     def update_attack_sg(self, im_blob, img0, **kwargs):
         self.frame_id_ += 1
+        attack_id = kwargs['attack_id']
+        self_track_id_ori = kwargs.get('track_id', {}).get('origin', None)
+        self_track_id_att = kwargs.get('track_id', {}).get('attack', None)
         activated_starcks = []
         refind_stracks = []
         lost_stracks = []
@@ -1951,7 +2000,7 @@ class JDETracker(object):
             track = detections[inew]
             if track.score < self.det_thresh:
                 continue
-            track.activate_(self.kalman_filter_, self.frame_id_)
+            track.activate_(self.kalman_filter_, self.frame_id_, track_id=self_track_id_ori)
             activated_starcks.append(track)
             dets_ids[dets_index[inew]] = track.track_id
         """ Step 5: Update state"""
@@ -1979,30 +2028,30 @@ class JDETracker(object):
         logger.debug('Lost: {}'.format([track.track_id for track in lost_stracks]))
         logger.debug('Removed: {}'.format([track.track_id for track in removed_stracks]))
 
-        attack_id = self.opt.attack_id
-        assert attack_id > 0, 'need --attack_id'
 
         attack = self.opt.attack
-        noise = torch.zeros_like(im_blob)
+        noise = None
+        suc = 0
         if self.attack_sg:
             for attack_ind, track_id in enumerate(dets_ids):
                 if track_id == attack_id:
-                    if not hasattr(self, f'frames_{attack_id}'):
-                        setattr(self, f'frames_{attack_id}', 0)
-                    if getattr(self, f'frames_{attack_id}') < self.FRAME_THR:
-                        setattr(self, f'frames_{attack_id}', getattr(self, f'frames_{attack_id}') + 1)
-                        break
-                    ious = bbox_ious(np.ascontiguousarray(dets[:, :4], dtype=np.float),
-                                     np.ascontiguousarray(dets[:, :4], dtype=np.float))
+                    if self.opt.attack_id > 0:
+                        if not hasattr(self, f'frames_{attack_id}'):
+                            setattr(self, f'frames_{attack_id}', 0)
+                        if getattr(self, f'frames_{attack_id}') < self.FRAME_THR:
+                            setattr(self, f'frames_{attack_id}', getattr(self, f'frames_{attack_id}') + 1)
+                            break
+                    ious = bbox_ious(np.ascontiguousarray(dets[:, :4], dtype=np.float64),
+                                     np.ascontiguousarray(dets[:, :4], dtype=np.float64))
 
                     ious = self.processIoUs(ious)
                     ious = ious + ious.T
                     target_ind = np.argmax(ious[attack_ind])
-                    if ious[attack_ind][target_ind] > self.attack_iou_thr:
+                    if ious[attack_ind][target_ind] >= self.attack_iou_thr:
                         target_id = dets_ids[target_ind]
                         fit = self.CheckFit(dets, id_feature, [attack_id], [attack_ind])
                         if fit:
-                            noise_, attack_iter = self.ifgsm_adam_sg(
+                            noise, attack_iter, suc = self.ifgsm_adam_sg(
                                 im_blob,
                                 img0,
                                 id_features,
@@ -2016,28 +2065,38 @@ class JDETracker(object):
                                 target_id=target_id,
                                 target_ind=target_ind
                             )
-                            if noise_ is not None:
-                                print(f'attack frame {self.frame_id_}: SUCCESS\tl2 distance: {(noise_ ** 2).sum().sqrt().item()}\titeration: {attack_iter}')
-                                noise = noise_
-                                self.attack_iou_thr = 0
+                            self.attack_iou_thr = 0
+                            if suc:
+                                suc = 1
+                                print(f'attack id: {attack_id}\tattack frame {self.frame_id_}: SUCCESS\tl2 distance: {(noise ** 2).sum().sqrt().item()}\titeration: {attack_iter}')
                             else:
-                                print(f'attack frame {self.frame_id_}: FAIL')
+                                suc = 2
+                                print(f'attack id: {attack_id}\tattack frame {self.frame_id_}: FAIL\tl2 distance: {(noise ** 2).sum().sqrt().item()}\titeration: {attack_iter}')
+                        if ious[attack_ind][target_ind] == 0:
+                            self.temp_i += 1
+                            if self.temp_i >= 10:
+                                self.attack_iou_thr = self.ATTACK_IOU_THR
+                        else:
+                            self.temp_i = 0
                     else:
                         self.attack_iou_thr = self.ATTACK_IOU_THR
                     break
 
-        l2_dis = (noise ** 2).sum().sqrt().item()
-        im_blob = torch.clip(im_blob+noise, min=0, max=1)
+        if noise is not None:
+            l2_dis = (noise ** 2).sum().sqrt().item()
+            im_blob = torch.clip(im_blob + noise, min=0, max=1)
 
-        output_stracks_att = self.update(im_blob, img0, **kwargs)
+            noise = self.recoverNoise(noise, img0)
+            adImg = np.clip(img0 + noise, a_min=0, a_max=255)
 
-        noise = self.recoverNoise(noise, img0)
-        adImg = np.clip(img0 + noise, a_min=0, a_max=255)
+            noise = (noise - np.min(noise)) / (np.max(noise) - np.min(noise))
+            noise = (noise * 255).astype(np.uint8)
+        else:
+            l2_dis = None
+            adImg = img0
+        output_stracks_att = self.update(im_blob, img0, track_id=self_track_id_att)
 
-        noise = (noise - np.min(noise)) / (np.max(noise) - np.min(noise))
-        noise = (noise * 255).astype(np.uint8)
-
-        return output_stracks_ori, output_stracks_att, adImg, noise, l2_dis
+        return output_stracks_ori, output_stracks_att, adImg, noise, l2_dis, suc
 
     def update_attack_mt(self, im_blob, img0, **kwargs):
         self.frame_id_ += 1
@@ -2398,6 +2457,7 @@ class JDETracker(object):
 
     def update(self, im_blob, img0, **kwargs):
         self.frame_id += 1
+        self_track_id = kwargs.get('track_id', None)
         activated_starcks = []
         refind_stracks = []
         lost_stracks = []
@@ -2549,7 +2609,7 @@ class JDETracker(object):
             track = detections[inew]
             if track.score < self.det_thresh:
                 continue
-            track.activate(self.kalman_filter, self.frame_id)
+            track.activate(self.kalman_filter, self.frame_id, track_id=self_track_id)
             activated_starcks.append(track)
         """ Step 5: Update state"""
         for track in self.lost_stracks:
