@@ -292,6 +292,8 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
                 )
                 if l2_dis is not None:
                     l2_distance.append(l2_dis)
+            elif opt.attack == 'multiple_z':
+                online_targets_ori, output_stracks_att, adImg, noise, l2_dis=tracker.update_attack_z(blob, img0,name=path.replace(root_r, ''))
             else:
                 raise RuntimeError()
             imgPath = os.path.join(imgRoot, path.replace(root_r, ''))
@@ -490,6 +492,8 @@ if __name__ == '__main__':
     elif opt.attack == 'single':
         opt.output_dir = os.path.join(opt.output_dir, f'{opt.attack}_{opt.attack_id}')
     elif opt.attack == 'multiple':
+        opt.output_dir = os.path.join(opt.output_dir, opt.attack)
+    elif opt.attack == 'multiple_z':
         opt.output_dir = os.path.join(opt.output_dir, opt.attack)
     elif not opt.attack:
         opt.output_dir = os.path.join(opt.output_dir, 'origin')
