@@ -34,6 +34,7 @@ from scipy.optimize import linear_sum_assignment
 import copy
 from cython_bbox import bbox_overlaps as bbox_ious
 
+
 class TrackObject:
     def __init__(self, result_lines, id):
         self.dic = {}
@@ -74,7 +75,6 @@ class TrackObject:
         return s
 
 
-
 def write_results(filename, results, data_type):
     if data_type == 'mot':
         save_format = '{frame},{id},{x1},{y1},{w},{h},1,-1,-1,-1\n'
@@ -96,10 +96,12 @@ def write_results(filename, results, data_type):
                 f.write(line)
     logger.info('save results to {}'.format(filename))
 
+
 def show(img, dets):
     for det in dets:
         det = det[0]
-        img = cv2.rectangle(img, (int(det[0]), int(det[1])), (int(det[0]+det[2]), int(det[1]+det[3])), color=(255,1,1))
+        img = cv2.rectangle(img, (int(det[0]), int(det[1])), (int(det[0] + det[2]), int(det[1] + det[3])),
+                            color=(255, 1, 1))
     return img
 
 
@@ -178,6 +180,7 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
 
     track_id = {'track_id': 1}
     sg_track_ids = {}
+    sg_attack_frames = {}
 
     if save_dir:
         mkdir_if_missing(save_dir)
@@ -255,6 +258,10 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
                     sg_track_outputs[attack_id]['output_stracks_att'] = output_stracks_att
                     sg_track_outputs[attack_id]['adImg'] = adImg
                     sg_track_outputs[attack_id]['noise'] = noise
+                    if suc in [1, 2]:
+                        if attack_id not in sg_attack_frames:
+                            sg_attack_frames[attack_id] = 0
+                        sg_attack_frames[attack_id] += 1
                     if attack_id not in results_att_sg:
                         results_att_sg[attack_id] = []
                     if attack_id not in l2_distance_sg:
@@ -265,6 +272,10 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
                         suc_frequency_ids[attack_id] = 1
                     elif suc == 2:
                         suc_frequency_ids.pop(attack_id, None)
+                    elif suc == 3:
+                        if attack_id not in suc_frequency_ids:
+                            suc_frequency_ids[attack_id] = 0
+                        suc_frequency_ids[attack_id] += 1
                     elif attack_id in suc_frequency_ids:
                         suc_frequency_ids[attack_id] += 1
                         if suc_frequency_ids[attack_id] > 20:
@@ -293,7 +304,12 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
                 if l2_dis is not None:
                     l2_distance.append(l2_dis)
             elif opt.attack == 'multiple_z':
-                online_targets_ori, output_stracks_att, adImg, noise, l2_dis=tracker.update_attack_z(blob, img0,name=path.replace(root_r, ''))
+                online_targets_ori, output_stracks_att, adImg, noise, l2_dis = tracker.update_attack_z(
+                    blob,
+                    img0,
+                    name=path.replace(root_r, ''))
+                if l2_dis is not None:
+                    l2_distance.append(l2_dis)
             else:
                 raise RuntimeError()
             imgPath = os.path.join(imgRoot, path.replace(root_r, ''))
@@ -375,7 +391,8 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
             os.makedirs(save_dir, exist_ok=True)
             if opt.attack == 'single' and opt.attack_id == -1:
                 for key in sg_track_outputs.keys():
-                    cv2.imwrite(os.path.join(save_dir, '{:05d}_{}.jpg'.format(frame_id, key)), sg_track_outputs[key]['online_im'])
+                    cv2.imwrite(os.path.join(save_dir, '{:05d}_{}.jpg'.format(frame_id, key)),
+                                sg_track_outputs[key]['online_im'])
             else:
                 cv2.imwrite(os.path.join(save_dir, '{:05d}.jpg'.format(frame_id)), online_im)
         frame_id += 1
@@ -393,6 +410,8 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
         print(f'All successfully attacked ids is {suc_attacked_ids}')
         print(f'All unsuccessfully attacked ids is {need_attack_ids - suc_attacked_ids}')
         print(f'The accuracy is {round(100 * len(suc_attacked_ids) / len(need_attack_ids), 2)}%')
+        print(f'The attacked frames: {sg_attack_frames}\tmin: {min(sg_attack_frames.values())}\t'
+              f'max: {max(sg_attack_frames.values())}\tmean: {sum(sg_attack_frames.values()) / len(sg_attack_frames)}')
     return frame_id, timer.average_time, timer.calls, l2_distance
 
 
@@ -427,8 +446,8 @@ def main(opt, data_root='/data/MOT16/train', det_root=None, seqs=('MOT16-05',), 
         # import pdb; pdb.set_trace()
 
         nf, ta, tc, l2_distance = eval_seq(opt, dataloader, data_type, result_filename,
-                              save_dir=output_dir, show_image=show_image, frame_rate=frame_rate, gt_dict=gt_frame_dict)
-
+                                           save_dir=output_dir, show_image=show_image, frame_rate=frame_rate,
+                                           gt_dict=gt_frame_dict)
 
         n_frame += nf
         timer_avgs.append(ta)

@@ -352,7 +352,7 @@ class JDETracker(object):
         self.attack_mt = True
         self.attacked_ids = set([])
         self.low_iou_ids = set([])
-        self.ATTACK_IOU_THR = 0.4
+        self.ATTACK_IOU_THR = 0.3
         self.attack_iou_thr = self.ATTACK_IOU_THR
         self.ad_last_info = copy.deepcopy(ad_last_info)
         self.FRAME_THR = 10
@@ -956,6 +956,7 @@ class JDETracker(object):
         adam_v = 0
 
         i = 0
+        j = -1
         suc = True
         while True:
             i += 1
@@ -978,7 +979,7 @@ class JDETracker(object):
             loss += loss_feat / len(id_features)
             loss -= mse(im_blob, im_blob_ori)
 
-            if i in [10, 20, 30, 40]:
+            if i in [10, 20, 30, 35, 40, 45, 50, 55]:
                 attack_det_center = torch.stack([hm_index[attack_ind] % W, hm_index[attack_ind] // W]).float()
                 target_det_center = torch.stack([hm_index[target_ind] % W, hm_index[target_ind] // W]).float()
                 if last_target_det_center is not None:
@@ -993,16 +994,8 @@ class JDETracker(object):
                         target_center_delta /= torch.max(torch.abs(target_center_delta))
                         target_det_center = torch.round(target_det_center - target_center_delta).int()
                         hm_index[target_ind] = target_det_center[0] + target_det_center[1] * W
-                # attack_center_delta = attack_det_center - last_target_det_center
-                # target_center_delta = target_det_center - last_attack_det_center
-                # if torch.max(torch.abs(attack_center_delta)) > 2:
-                #     attack_center_delta /= torch.max(torch.abs(attack_center_delta))
-                #     attack_det_center = torch.round(attack_det_center - attack_center_delta).int()
-                #     hm_index[attack_ind] = attack_det_center[0] + attack_det_center[1] * W
-                # if torch.max(torch.abs(target_center_delta)) > 2:
-                #     target_center_delta /= torch.max(torch.abs(target_center_delta))
-                #     target_det_center = torch.round(target_det_center - target_center_delta).int()
-                #     hm_index[target_ind] = target_det_center[0] + target_det_center[1] * W
+            if i == 40:
+                lr /= 10
 
             loss += ((1 - outputs['hm'].view(-1).sigmoid()[hm_index]) ** 2 *
                      torch.log(outputs['hm'].view(-1).sigmoid()[hm_index])).mean()
@@ -1041,7 +1034,7 @@ class JDETracker(object):
             if ae_id != attack_id and ae_id is not None:
                 break
 
-            if i > 50:
+            if i > 80:
                 suc = False
                 break
                 # return None, -1
@@ -1277,14 +1270,6 @@ class JDETracker(object):
         id_features_ = [None for _ in range(len(id_features))]
         for i in range(len(id_features)):
             id_features_[i] = id_features[i][[ae_attack_ind, ae_target_ind]]
-
-        # index = list(range(len(id_features[0])))
-        # index[attack_ind] = ae_attack_ind
-        # index[target_ind] = ae_target_ind
-        #
-        # id_features_ = [None for _ in range(len(id_features))]
-        # for i in range(9):
-        #     id_features_[i] = id_features[i][index]
 
         id_feature = _tranpose_and_gather_feat_expand(id_feature, inds)
         id_feature = id_feature.squeeze(0)
@@ -2079,6 +2064,8 @@ class JDETracker(object):
                             else:
                                 suc = 2
                                 print(f'attack id: {attack_id}\tattack frame {self.frame_id_}: FAIL\tl2 distance: {(noise ** 2).sum().sqrt().item()}\titeration: {attack_iter}')
+                        else:
+                            suc = 3
                         if ious[attack_ind][target_ind] == 0:
                             self.temp_i += 1
                             if self.temp_i >= 10:
