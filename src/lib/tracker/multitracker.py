@@ -29,6 +29,7 @@ import random
 import pickle
 import copy
 
+
 class GaussianBlurConv(nn.Module):
     def __init__(self, channels=3):
         super(GaussianBlurConv, self).__init__()
@@ -45,6 +46,7 @@ class GaussianBlurConv(nn.Module):
     def __call__(self, x):
         x = F.conv2d(x, self.weight, padding=2, groups=self.channels)
         return x
+
 
 gaussianBlurConv = GaussianBlurConv().cuda()
 
@@ -66,12 +68,13 @@ if seed == 0:
 smoothL1 = torch.nn.SmoothL1Loss()
 mse = torch.nn.MSELoss()
 
-
-
 td_ = {}
+
+
 class STrack(BaseTrack):
     shared_kalman = KalmanFilter()
     shared_kalman_ = KalmanFilter()
+
     def __init__(self, tlwh, score, temp_feat, buffer_size=30):
 
         # wait activate
@@ -306,13 +309,11 @@ class JDETracker(object):
         self.model = load_model(self.model, opt.load_model)
         self.model = self.model.to(opt.device)
         self.model.eval()
-		
-		#attack matching
 
-        self.log_index=[]
-        self.unconfirmed_ad_iou=None
-        self.tracked_stracks_ad_iou=None
-        self.strack_pool_ad_iou=None
+        self.log_index = []
+        self.unconfirmed_ad_iou = None
+        self.tracked_stracks_ad_iou = None
+        self.strack_pool_ad_iou = None
 
         self.tracked_stracks = copy.deepcopy(tracked_stracks)  # type: list[STrack]
         self.lost_stracks = copy.deepcopy(lost_stracks)  # type: list[STrack]
@@ -398,7 +399,8 @@ class JDETracker(object):
         top, bottom = round(dh - 0.1), round(dh + 0.1)
         left, right = round(dw - 0.1), round(dw + 0.1)
 
-        im_blob = im_blob.squeeze().permute(1, 2, 0)[top:height-bottom, left:width-right, :].numpy().astype(np.uint8)
+        im_blob = im_blob.squeeze().permute(1, 2, 0)[top:height - bottom, left:width - right, :].numpy().astype(
+            np.uint8)
         im_blob = cv2.cvtColor(im_blob, cv2.COLOR_RGB2BGR)
 
         h, w, _ = img0.shape
@@ -449,7 +451,7 @@ class JDETracker(object):
 
     def linear_insert_1color(self, img_dt, resize, fx=None, fy=None):
         pos_0_0, pos_0_1, pos_1_1, pos_1_0, m, n = self.insert_linear_pos(img_dt=img_dt, resize=resize, x_scale=fx,
-                                                                     y_scale=fy)
+                                                                          y_scale=fy)
         a = (pos_1_0 - pos_0_0)
         b = (pos_0_1 - pos_0_0)
         c = pos_1_1 + pos_0_0 - pos_1_0 - pos_0_1
@@ -501,14 +503,13 @@ class JDETracker(object):
         noise = torch.from_numpy(noise).cuda().float()
 
         noise = noise.permute(2, 0, 1).unsqueeze(0)
-        noise = self.resizeTensor(noise, height-bottom-top, width-right-left)
+        noise = self.resizeTensor(noise, height - bottom - top, width - right - left)
 
         noise_ = torch.zeros((1, 3, height, width)).cuda()
 
         noise_[:, :, top:height - bottom, left:width - right] = noise
 
         return noise_
-
 
     @staticmethod
     def resizeTensor(tensor, height, width):
@@ -519,7 +520,6 @@ class JDETracker(object):
 
         output = F.grid_sample(tensor, grid=grid, mode='bilinear', align_corners=True)
         return output
-
 
     @staticmethod
     def processIoUs(ious):
@@ -642,7 +642,8 @@ class JDETracker(object):
         # noise = gaussianBlurConv(noise)
         return noise
 
-    def fgsm_l2(self, im_blob, id_features, last_ad_id_features, dets, outputs_ori=None, outputs=None, ori_im_blob=None, lr=0.1):
+    def fgsm_l2(self, im_blob, id_features, last_ad_id_features, dets, outputs_ori=None, outputs=None, ori_im_blob=None,
+                lr=0.1):
         ious = bbox_ious(np.ascontiguousarray(dets[:, :4], dtype=np.float),
                          np.ascontiguousarray(dets[:, :4], dtype=np.float))
 
@@ -676,7 +677,8 @@ class JDETracker(object):
         # noise = gaussianBlurConv(noise)
         return noise
 
-    def fgsm_l2_(self, im_blob, id_features, last_ad_id_features, dets, outputs_ori=None, outputs=None, ori_im_blob=None, lr=0.1):
+    def fgsm_l2_(self, im_blob, id_features, last_ad_id_features, dets, outputs_ori=None, outputs=None,
+                 ori_im_blob=None, lr=0.1):
         ious = bbox_ious(np.ascontiguousarray(dets[:, :4], dtype=np.float),
                          np.ascontiguousarray(dets[:, :4], dtype=np.float))
 
@@ -738,13 +740,15 @@ class JDETracker(object):
         noise = im_blob.grad.sign() * epsilon
         return noise
 
-    def ifgsmV2(self, im_blob, id_features, last_ad_id_features, dets, inds, remain_inds, outputs_ori, epsilon=0.03, alpha=0.003):
+    def ifgsmV2(self, im_blob, id_features, last_ad_id_features, dets, inds, remain_inds, outputs_ori, epsilon=0.03,
+                alpha=0.003):
         noise = self.fgsmV2(im_blob, id_features, last_ad_id_features, dets, epsilon=alpha)
         num = int(epsilon / alpha)
         for i in range(num):
             im_blob_ad = torch.clip(im_blob + noise, min=0, max=1).data
             id_features, outputs = self.forwardFeature(im_blob_ad, inds, remain_inds)
-            noise += self.fgsmV2_(im_blob_ad, id_features, last_ad_id_features, dets, outputs_ori, outputs, epsilon=alpha)
+            noise += self.fgsmV2_(im_blob_ad, id_features, last_ad_id_features, dets, outputs_ori, outputs,
+                                  epsilon=alpha)
         return noise
 
     def ifgsm_gd(self, im_blob, id_features, last_ad_id_features, dets, inds, remain_inds, outputs_ori):
@@ -759,7 +763,7 @@ class JDETracker(object):
                 ori_im_blob=im_blob
             )
             noise += noise_
-            if (noise_**2).sum().sqrt().item() < 1:
+            if (noise_ ** 2).sum().sqrt().item() < 1:
                 break
         return noise
 
@@ -819,19 +823,19 @@ class JDETracker(object):
                 last_ad_id_feature = torch.from_numpy(last_ad_id_features[attack_ind]).unsqueeze(0).cuda()
                 sim_1 = torch.mm(id_feature[attack_ind:attack_ind + 1], last_ad_id_feature.T).squeeze()
                 sim_2 = torch.mm(id_feature[target_ind:target_ind + 1], last_ad_id_feature.T).squeeze()
-                loss += sim_2 - sim_1 # min(sim_2 - sim_1, 0.2)
+                loss += sim_2 - sim_1  # min(sim_2 - sim_1, 0.2)
             if last_ad_id_features[target_ind] is not None:
                 last_ad_id_feature = torch.from_numpy(last_ad_id_features[target_ind]).unsqueeze(0).cuda()
                 sim_1 = torch.mm(id_feature[target_ind:target_ind + 1], last_ad_id_feature.T).squeeze()
                 sim_2 = torch.mm(id_feature[attack_ind:attack_ind + 1], last_ad_id_feature.T).squeeze()
-                loss += sim_2 - sim_1 # min(sim_2 - sim_1, 0.2)
+                loss += sim_2 - sim_1  # min(sim_2 - sim_1, 0.2)
             if last_ad_id_features[attack_ind] is None and last_ad_id_features[target_ind] is None:
-                loss += torch.mm(id_feature[attack_ind:attack_ind + 1], id_feature[target_ind:target_ind + 1].T).squeeze()
+                loss += torch.mm(id_feature[attack_ind:attack_ind + 1],
+                                 id_feature[target_ind:target_ind + 1].T).squeeze()
             loss -= mse(im_blob, im_blob_ori)
             loss -= mse(outputs['hm'].view(-1)[inds[0][remain_inds]], hm_ori.view(-1)[inds[0][remain_inds]])
 
             if i >= 20:
-
                 wh = outputs['wh'].permute(0, 2, 3, 1).view(-1, 2)[index]
                 reg = outputs['reg'].permute(0, 2, 3, 1).view(-1, 2)[index]
                 centers = torch.stack([index % W, index // W], dim=1)
@@ -927,6 +931,8 @@ class JDETracker(object):
         noise = torch.zeros_like(im_blob)
         im_blob_ori = im_blob.clone().data
         outputs = outputs_ori
+        wh_ori = outputs['wh'].clone().data
+        reg_ori = outputs['reg'].clone().data
 
         last_ad_id_features = [None for _ in range(len(id_features[0]))]
         strack_pool = copy.deepcopy(last_info['last_strack_pool'])
@@ -944,10 +950,13 @@ class JDETracker(object):
                 last_target_det = torch.from_numpy(strack.tlbr).cuda().float()
                 last_target_det[[0, 2]] = (last_target_det[[0, 2]] - 0.5 * W * (r_w - r_max)) / r_max
                 last_target_det[[1, 3]] = (last_target_det[[1, 3]] - 0.5 * H * (r_h - r_max)) / r_max
-        last_attack_det_center = torch.round((last_attack_det[:2] + last_attack_det[2:]) / 2) if last_attack_det is not None else None
-        last_target_det_center = torch.round((last_target_det[:2] + last_target_det[2:]) / 2) if last_target_det is not None else None
+        last_attack_det_center = torch.round(
+            (last_attack_det[:2] + last_attack_det[2:]) / 2) if last_attack_det is not None else None
+        last_target_det_center = torch.round(
+            (last_target_det[:2] + last_target_det[2:]) / 2) if last_target_det is not None else None
 
         hm_index = inds[0][remain_inds]
+        hm_index_ori = copy.deepcopy(hm_index)
 
         for i in range(len(id_features)):
             id_features[i] = id_features[i][[attack_ind, target_ind]]
@@ -963,7 +972,7 @@ class JDETracker(object):
             loss = 0
             loss_feat = 0
             for id_i, id_feature in enumerate(id_features):
-            # id_feature = id_features[4]
+                # id_feature = id_features[4]
                 if last_ad_id_features[attack_ind] is not None:
                     last_ad_id_feature = torch.from_numpy(last_ad_id_features[attack_ind]).unsqueeze(0).cuda()
                     sim_1 = torch.mm(id_feature[0:0 + 1], last_ad_id_feature.T).squeeze()
@@ -999,6 +1008,9 @@ class JDETracker(object):
 
             loss += ((1 - outputs['hm'].view(-1).sigmoid()[hm_index]) ** 2 *
                      torch.log(outputs['hm'].view(-1).sigmoid()[hm_index])).mean()
+
+            loss -= mse(outputs['wh'].view(-1)[hm_index], wh_ori.view(-1)[hm_index_ori])
+            loss -= mse(outputs['reg'].view(-1)[hm_index], reg_ori.view(-1)[hm_index_ori])
 
             loss.backward()
 
@@ -1123,7 +1135,8 @@ class JDETracker(object):
                         sim_2 = torch.mm(id_feature[attack_ind:attack_ind + 1], last_ad_id_feature.T).squeeze()
                         loss_feat += sim_2 - sim_1
                     if last_ad_id_features[attack_ind] is None and last_ad_id_features[target_ind] is None:
-                        loss_feat += torch.mm(id_feature[attack_ind:attack_ind + 1], id_feature[target_ind:target_ind + 1].T).squeeze()
+                        loss_feat += torch.mm(id_feature[attack_ind:attack_ind + 1],
+                                              id_feature[target_ind:target_ind + 1].T).squeeze()
 
                 if i in [10, 20, 30, 40]:
                     attack_det_center = torch.stack([hm_index[attack_ind] % W, hm_index[attack_ind] // W]).float()
@@ -1209,7 +1222,8 @@ class JDETracker(object):
             id_features[i] = id_features[i][remain_inds]
         return id_features, output
 
-    def forwardFeatureSg(self, im_blob, img0, dets_, inds_, remain_inds_, attack_id, attack_ind, target_id, target_ind, last_info):
+    def forwardFeatureSg(self, im_blob, img0, dets_, inds_, remain_inds_, attack_id, attack_ind, target_id, target_ind,
+                         last_info):
         width = img0.shape[1]
         height = img0.shape[0]
         inp_height = im_blob.shape[2]
@@ -1315,7 +1329,6 @@ class JDETracker(object):
                 ae_attack_id = track.track_id
                 return id_features_, output, ae_attack_id
 
-
         '''Deal with unconfirmed tracks, usually tracks with only one beginning frame'''
         for i, idet in enumerate(u_detection):
             if idet == ae_attack_ind:
@@ -1332,7 +1345,8 @@ class JDETracker(object):
 
         return id_features_, output, ae_attack_id
 
-    def forwardFeatureMt(self, im_blob, img0, dets_, inds_, remain_inds_, attack_ids, attack_inds, target_ids, target_inds, last_info):
+    def forwardFeatureMt(self, im_blob, img0, dets_, inds_, remain_inds_, attack_ids, attack_inds, target_ids,
+                         target_inds, last_info):
         width = img0.shape[1]
         height = img0.shape[0]
         inp_height = im_blob.shape[2]
@@ -1453,7 +1467,6 @@ class JDETracker(object):
                 index = ae_attack_inds.tolist().index(dets_index[idet])
                 if track.track_id == attack_ids[index]:
                     fail_ids += 1
-
 
         '''Deal with unconfirmed tracks, usually tracks with only one beginning frame'''
         dets_index = [dets_index[i] for i in u_detection]
@@ -1683,11 +1696,11 @@ class JDETracker(object):
         ''' Step 2: First association, with embedding'''
         strack_pool = joint_stracks(tracked_stracks, self.lost_stracks_)
         # Predict the current location with KF
-        #for strack in strack_pool:
-            #strack.predict()
+        # for strack in strack_pool:
+        # strack.predict()
         STrack.multi_predict(strack_pool)
         dists = matching.embedding_distance(strack_pool, detections)
-        #dists = matching.gate_cost_matrix(self.kalman_filter, dists, strack_pool, detections)
+        # dists = matching.gate_cost_matrix(self.kalman_filter, dists, strack_pool, detections)
         dists = matching.fuse_motion(self.kalman_filter_, dists, strack_pool, detections)
         matches, u_track, u_detection = matching.linear_assignment(dists, thresh=0.7)
         # import pdb; pdb.set_trace()
@@ -1799,7 +1812,8 @@ class JDETracker(object):
         elif attack == 'ifgsmV2':
             noise = self.ifgsmV2(im_blob, id_features, last_ad_id_features, dets, inds, remain_inds, outputs_ori=output)
         elif attack == 'ifgsm_gd':
-            noise = self.ifgsm_gd(im_blob, id_features, last_ad_id_features, dets, inds, remain_inds, outputs_ori=output)
+            noise = self.ifgsm_gd(im_blob, id_features, last_ad_id_features, dets, inds, remain_inds,
+                                  outputs_ori=output)
         else:
             raise Exception(f'Cannot find {attack}')
 
@@ -1807,7 +1821,7 @@ class JDETracker(object):
 
         # noise = self.recoverNoise(noise, img0)
         # noise = self.deRecoverNoise(noise, img0)
-        im_blob = torch.clip(im_blob+noise, min=0, max=1)
+        im_blob = torch.clip(im_blob + noise, min=0, max=1)
         # im_blob = (im_blob * 255).int().float() / 255
 
         self.update_ad(im_blob, img0, dets_raw, inds, tracks_ad, **kwargs)
@@ -1918,7 +1932,7 @@ class JDETracker(object):
 
         STrack.multi_predict(strack_pool)
         dists = matching.embedding_distance(strack_pool, detections)
-        #dists = matching.gate_cost_matrix(self.kalman_filter, dists, strack_pool, detections)
+        # dists = matching.gate_cost_matrix(self.kalman_filter, dists, strack_pool, detections)
         dists = matching.fuse_motion(self.kalman_filter_, dists, strack_pool, detections)
         matches, u_track, u_detection = matching.linear_assignment(dists, thresh=0.7)
         # import pdb; pdb.set_trace()
@@ -2020,7 +2034,6 @@ class JDETracker(object):
         logger.debug('Lost: {}'.format([track.track_id for track in lost_stracks]))
         logger.debug('Removed: {}'.format([track.track_id for track in removed_stracks]))
 
-
         attack = self.opt.attack
         noise = None
         suc = 0
@@ -2060,10 +2073,12 @@ class JDETracker(object):
                             self.attack_iou_thr = 0
                             if suc:
                                 suc = 1
-                                print(f'attack id: {attack_id}\tattack frame {self.frame_id_}: SUCCESS\tl2 distance: {(noise ** 2).sum().sqrt().item()}\titeration: {attack_iter}')
+                                print(
+                                    f'attack id: {attack_id}\tattack frame {self.frame_id_}: SUCCESS\tl2 distance: {(noise ** 2).sum().sqrt().item()}\titeration: {attack_iter}')
                             else:
                                 suc = 2
-                                print(f'attack id: {attack_id}\tattack frame {self.frame_id_}: FAIL\tl2 distance: {(noise ** 2).sum().sqrt().item()}\titeration: {attack_iter}')
+                                print(
+                                    f'attack id: {attack_id}\tattack frame {self.frame_id_}: FAIL\tl2 distance: {(noise ** 2).sum().sqrt().item()}\titeration: {attack_iter}')
                         else:
                             suc = 3
                         if ious[attack_ind][target_ind] == 0:
@@ -2246,7 +2261,8 @@ class JDETracker(object):
         if ad_strack_pool:
             ad_dets_index = [ad_dets_index[i] for i in ad_u_detection]
             ad_detections = [detections_[i] for i in ad_u_detection]
-            ad_r_tracked_stracks = [ad_strack_pool[i] for i in ad_u_track if ad_strack_pool[i].state == TrackState.Tracked]
+            ad_r_tracked_stracks = [ad_strack_pool[i] for i in ad_u_track if
+                                    ad_strack_pool[i].state == TrackState.Tracked]
             dists = matching.iou_distance(ad_r_tracked_stracks, ad_detections)
             ad_matches, ad_u_track, ad_u_detection = matching.linear_assignment(dists, thresh=0.5)
             for itracked, idet in ad_matches:
@@ -2347,7 +2363,7 @@ class JDETracker(object):
             ious_inds = np.argmax(ious, axis=1)
             for attack_ind, track_id in enumerate(dets_ids):
                 if ious[attack_ind, ious_inds[attack_ind]] > self.ATTACK_IOU_THR or (
-                    track_id in self.low_iou_ids and ious[attack_ind, ious_inds[attack_ind]] > 0
+                        track_id in self.low_iou_ids and ious[attack_ind, ious_inds[attack_ind]] > 0
                 ):
                     attack_ids.append(track_id)
                     target_ids.append(dets_ids[ious_inds[attack_ind]])
@@ -2355,7 +2371,7 @@ class JDETracker(object):
                     target_inds.append(ious_inds[attack_ind])
                 elif track_id in self.low_iou_ids and ious[attack_ind, ious_inds[attack_ind]] == 0:
                     self.low_iou_ids.remove(track_id)
-                    
+
             fit_index = self.CheckFit(dets, id_feature, attack_ids, attack_inds)
             if fit_index:
                 attack_ids = np.array(attack_ids)[fit_index]
@@ -2380,13 +2396,14 @@ class JDETracker(object):
                 if noise_ is not None:
                     self.attacked_ids.update(set(attack_ids))
                     self.low_iou_ids.update(set(attack_ids))
-                    print(f'attack frame {self.frame_id_}: SUCCESS\tl2 distance: {(noise_ ** 2).sum().sqrt().item()}\titeration: {attack_iter}')
+                    print(
+                        f'attack frame {self.frame_id_}: SUCCESS\tl2 distance: {(noise_ ** 2).sum().sqrt().item()}\titeration: {attack_iter}')
                     noise = noise_
                 else:
                     print(f'attack frame {self.frame_id_}: FAIL')
 
         l2_dis = (noise ** 2).sum().sqrt().item()
-        im_blob = torch.clip(im_blob+noise, min=0, max=1)
+        im_blob = torch.clip(im_blob + noise, min=0, max=1)
 
         output_stracks_att = self.update(im_blob, img0, **kwargs)
 
@@ -2428,7 +2445,6 @@ class JDETracker(object):
         dets = self.merge_outputs([dets])[1]
 
         remain_inds = dets[:, 4] > self.opt.conf_thres
-
 
         id_features = []
         for i in range(3):
@@ -2527,8 +2543,8 @@ class JDETracker(object):
         strack_pool = joint_stracks(tracked_stracks, self.lost_stracks)
 
         # Predict the current location with KF
-        #for strack in strack_pool:
-            #strack.predict()
+        # for strack in strack_pool:
+        # strack.predict()
         STrack.multi_predict(strack_pool)
         dists = matching.embedding_distance(strack_pool, detections)
         dists = matching.fuse_motion(self.kalman_filter, dists, strack_pool, detections)
@@ -2590,7 +2606,8 @@ class JDETracker(object):
                 td_ind[unconfirmed[itracked].track_id] = dets_index[idet]
                 if unconfirmed[itracked].track_id not in td_:
                     td_[unconfirmed[itracked].track_id] = [None for i in range(50)]
-                td_[unconfirmed[itracked].track_id][self.frame_id] = (unconfirmed[itracked].smooth_feat, detections[idet].smooth_feat)
+                td_[unconfirmed[itracked].track_id][self.frame_id] = (
+                unconfirmed[itracked].smooth_feat, detections[idet].smooth_feat)
             unconfirmed[itracked].update(detections[idet], self.frame_id)
             activated_starcks.append(unconfirmed[itracked])
         for it in u_unconfirmed:
@@ -2635,7 +2652,7 @@ class JDETracker(object):
                     if td_[fi][i] is None or td_[fj][i] is None:
                         continue
                     f_1.append(td_[fi][i][0] @ td_[fi][i][1])
-                    f_2.append(td_[fi][i][0]@td_[fj][i][1])
+                    f_2.append(td_[fi][i][0] @ td_[fj][i][1])
                 f1 = sum(f_1) / len(f_1)
                 f2 = sum(f_2) / len(f_2)
 
@@ -2644,7 +2661,8 @@ class JDETracker(object):
                     if f_2[i] > f_1[i]:
                         sc += 1
                 print(f'f1:{f1}, f2:{f2}, sc:{sc}, len:{len(f_1)}')
-                import pdb; pdb.set_trace()
+                import pdb;
+                pdb.set_trace()
 
         logger.debug('===========Frame {}=========='.format(self.frame_id))
         logger.debug('Activated: {}'.format([track.track_id for track in activated_starcks]))
@@ -2670,41 +2688,44 @@ class JDETracker(object):
         }
 
         return output_stracks
-    def _nms(self,heat,kernel=3):
-	
-        pad=(kernel-1)//2
-        hmax=nn.functional.max_pool2d(
-            heat,(kernel,kernel),stride=1,padding=pad)
-        keep=(hmax==heat).float
+
+    def _nms(self, heat, kernel=3):
+
+        pad = (kernel - 1) // 2
+        hmax = nn.functional.max_pool2d(
+            heat, (kernel, kernel), stride=1, padding=pad)
+        keep = (hmax == heat).float
         return keep
-    
-    def computer_targets(self,boxes,gt_box):
-    
-        an_ws=boxes[:,2]
-        an_hs=boxes[:,3]
-        ctr_x=boxes[:,0]
-        ctr_y=boxes[:,1]
-        
-        gt_ws=gt_box[:,2]
-        gt_hs=gt_box[:,3]
-        gt_ctr_x=gt_box[:,0]
-        gt_ctr_y=gt_box[:,1]
-        
-        targets_dx=(gt_ctr_x-ctr_x)/an_ws
-        targets_dy=(gt_ctr_y-ctr_y)/an_hs
-        targets_dw=np.log(gt_ws/an_ws)
-        targets_dh=np.log(gt_hs/an_hs)
-        
-        targets=np.vstack((targets_dx,targets_dy,targets_dw,targets_dh)).T
-        
+
+    def computer_targets(self, boxes, gt_box):
+
+        an_ws = boxes[:, 2]
+        an_hs = boxes[:, 3]
+        ctr_x = boxes[:, 0]
+        ctr_y = boxes[:, 1]
+
+        gt_ws = gt_box[:, 2]
+        gt_hs = gt_box[:, 3]
+        gt_ctr_x = gt_box[:, 0]
+        gt_ctr_y = gt_box[:, 1]
+
+        targets_dx = (gt_ctr_x - ctr_x) / an_ws
+        targets_dy = (gt_ctr_y - ctr_y) / an_hs
+        targets_dw = np.log(gt_ws / an_ws)
+        targets_dh = np.log(gt_hs / an_hs)
+
+        targets = np.vstack((targets_dx, targets_dy, targets_dw, targets_dh)).T
+
         return targets
-    def fgsmV2_1(self,im_blob, id_features, last_ad_id_features, dets, outputs_ori, outputs,ori_det,ad_det,epsilon=0.03):
+
+    def fgsmV2_1(self, im_blob, id_features, last_ad_id_features, dets, outputs_ori, outputs, ori_det, ad_det,
+                 epsilon=0.03):
         ious = bbox_ious(np.ascontiguousarray(dets[:, :4], dtype=np.float),
                          np.ascontiguousarray(dets[:, :4], dtype=np.float))
         ious = self.processIoUs(ious)
         loss = 0
         loss_det = 0
-        loss_det1=0
+        loss_det1 = 0
         for id_feature in id_features:
             for i in range(dets.shape[0]):
                 for j in range(i):
@@ -2721,33 +2742,33 @@ class JDETracker(object):
                             loss += torch.mm(id_feature[i:i + 1], id_feature[j:j + 1].T).squeeze()
 
         loss_det1 -= mse(outputs['hm'], outputs_ori['hm'].data)
-        #keep=self._nms(outputs_ori['hm'].data)
-        #loss_det-=SigmoidFocalLoss(gamma=2.0,alpha=0.25)(outputs['hm'],keep)
+        # keep=self._nms(outputs_ori['hm'].data)
+        # loss_det-=SigmoidFocalLoss(gamma=2.0,alpha=0.25)(outputs['hm'],keep)
 
-        if len(ad_det) > 0 and len(ori_det)>0:
+        if len(ad_det) > 0 and len(ori_det) > 0:
             '''Detections'''
             ori_detections = [STrack(STrack.tlbr_to_tlwh(tlbrs[:4]), tlbrs[4], f, 30) for
-                          (tlbrs, f) in zip(ori_det[:, :5], id_features[4].cpu().detach().numpy())]
-            ad_detections=[STrack(STrack.tlbr_to_tlwh(tlbrs[:4]), tlbrs[4], f, 30) for
-                          (tlbrs, f) in zip(ad_det[:, :5], id_features[4].cpu().detach().numpy())]
+                              (tlbrs, f) in zip(ori_det[:, :5], id_features[4].cpu().detach().numpy())]
+            ad_detections = [STrack(STrack.tlbr_to_tlwh(tlbrs[:4]), tlbrs[4], f, 30) for
+                             (tlbrs, f) in zip(ad_det[:, :5], id_features[4].cpu().detach().numpy())]
         else:
             ori_detections = []
-            ad_detections=[]
+            ad_detections = []
 
-        ad_dets=[]
-        ori_dets=[]
-        for_ad_track=[]
+        ad_dets = []
+        ori_dets = []
+        for_ad_track = []
         unconfirmed = []
         tracked_stracks = []  # type: list[STrack]
-        unconfirmed=self.unconfirmed_ad_iou
-        tracked_stracks=self.tracked_stracks_ad_iou
-        strack_pool=self.strack_pool_ad_iou
+        unconfirmed = self.unconfirmed_ad_iou
+        tracked_stracks = self.tracked_stracks_ad_iou
+        strack_pool = self.strack_pool_ad_iou
         STrack.multi_predict(strack_pool)
         dists = matching.embedding_distance(strack_pool, ori_detections)
         dists = matching.fuse_motion(self.kalman_filter, dists, strack_pool, ori_detections)
         matches, u_track, u_detection = matching.linear_assignment(dists, thresh=0.7)
         ori_detections = [ori_detections[i] for i in u_detection]
-        ad_detections=[ad_detections[i] for i in u_detection]
+        ad_detections = [ad_detections[i] for i in u_detection]
         r_tracked_stracks = [strack_pool[i] for i in u_track if strack_pool[i].state == TrackState.Tracked]
         dists = matching.iou_distance(r_tracked_stracks, ori_detections)
         matches, u_track, u_detection = matching.linear_assignment(dists, thresh=0.5)
@@ -2755,8 +2776,8 @@ class JDETracker(object):
         for itracked, idet in matches:
             track = r_tracked_stracks[itracked]
             ad_det = ad_detections[idet]
-            ori_det=ori_detections[idet]
-            
+            ori_det = ori_detections[idet]
+
             ad_dets.append(ad_det)
             ori_dets.append(ori_det)
             for_ad_track.append(track)
@@ -2766,41 +2787,40 @@ class JDETracker(object):
         for itracked, idet in matches:
             track = unconfirmed[itracked]
             ad_det = ad_detections[idet]
-            ori_det=ori_detections[idet]
-            
+            ori_det = ori_detections[idet]
+
             ad_dets.append(ad_det)
             ori_dets.append(ori_det)
             for_ad_track.append(track)
-        if len(ad_dets)>=2:
-            ad_dets=[track.to_xyah() for track in ad_dets]
-            ad_dets=np.vstack(ad_dets)
-            ad_dets[:,2]=ad_dets[:,2]*ad_dets[:,3]
-            ori_dets=[track.to_xyah() for track in ori_dets]
-            ori_dets=np.vstack(ori_dets)
-            ori_dets[:,2]=ori_dets[:,2]*ori_dets[:,3]
-            for_ad_track=[track.to_xyah() for track in for_ad_track]
-            for_ad_track=np.vstack(for_ad_track)
-            for_ad_track[:,2]=for_ad_track[:,2]*for_ad_track[:,3]
+        if len(ad_dets) >= 2:
+            ad_dets = [track.to_xyah() for track in ad_dets]
+            ad_dets = np.vstack(ad_dets)
+            ad_dets[:, 2] = ad_dets[:, 2] * ad_dets[:, 3]
+            ori_dets = [track.to_xyah() for track in ori_dets]
+            ori_dets = np.vstack(ori_dets)
+            ori_dets[:, 2] = ori_dets[:, 2] * ori_dets[:, 3]
+            for_ad_track = [track.to_xyah() for track in for_ad_track]
+            for_ad_track = np.vstack(for_ad_track)
+            for_ad_track[:, 2] = for_ad_track[:, 2] * for_ad_track[:, 3]
             ious = bbox_ious(np.ascontiguousarray(ori_dets, dtype=np.float),
-                            np.ascontiguousarray(ori_dets, dtype=np.float))
-            ious=self.processIoUs(ious)
-            xs,ys=np.where(ious>0)
-            ori_dx=ori_dets[xs]
-            ad_dx=ad_dets[xs]
-            for_ad_track_x=for_ad_track[xs]
+                             np.ascontiguousarray(ori_dets, dtype=np.float))
+            ious = self.processIoUs(ious)
+            xs, ys = np.where(ious > 0)
+            ori_dx = ori_dets[xs]
+            ad_dx = ad_dets[xs]
+            for_ad_track_x = for_ad_track[xs]
 
-            ori_dy=ori_dets[ys]
-            ad_dy=ad_dets[ys]
-            for_ad_track_y=for_ad_track[ys]
+            ori_dy = ori_dets[ys]
+            ad_dy = ad_dets[ys]
+            for_ad_track_y = for_ad_track[ys]
 
+            ad_dx_targets = torch.from_numpy(self.computer_targets(ad_dx, for_ad_track_y)).float()
+            ori_dy_targets = torch.from_numpy(self.computer_targets(ori_dy, for_ad_track_y)).float()
 
-            ad_dx_targets=torch.from_numpy(self.computer_targets(ad_dx,for_ad_track_y)).float()
-            ori_dy_targets=torch.from_numpy(self.computer_targets(ori_dy,for_ad_track_y)).float() 
+            ad_dy_targets = torch.from_numpy(self.computer_targets(ad_dy, for_ad_track_x)).float()
+            ori_dx_targets = torch.from_numpy(self.computer_targets(ori_dx, for_ad_track_x)).float()
 
-            ad_dy_targets=torch.from_numpy(self.computer_targets(ad_dy,for_ad_track_x)).float()
-            ori_dx_targets=torch.from_numpy(self.computer_targets(ori_dx,for_ad_track_x)).float()
-
-            loss_det=loss_det-smoothL1(ad_dx_targets,ori_dy_targets)-smoothL1(ad_dy_targets,ori_dx_targets)
+            loss_det = loss_det - smoothL1(ad_dx_targets, ori_dy_targets) - smoothL1(ad_dy_targets, ori_dx_targets)
 
         for key in ['wh', 'reg']:
             loss_det1 -= smoothL1(outputs[key], outputs_ori[key].data)
@@ -2811,25 +2831,29 @@ class JDETracker(object):
         noise = im_blob.grad.sign() * epsilon
         noise = gaussianBlurConv(noise)
         return noise
-    def ifgsmV21(self, im_blob, id_features, last_ad_id_features, dets, inds, remain_inds, outputs_ori, epsilon=0.03, alpha=0.003):
-        noise = self.fgsmV2(im_blob, id_features, last_ad_id_features, dets, epsilon=alpha)#9*[X,512],[X,512],[X,6]
+
+    def ifgsmV21(self, im_blob, id_features, last_ad_id_features, dets, inds, remain_inds, outputs_ori, epsilon=0.03,
+                 alpha=0.003):
+        noise = self.fgsmV2(im_blob, id_features, last_ad_id_features, dets, epsilon=alpha)  # 9*[X,512],[X,512],[X,6]
         num = int(epsilon / alpha)
         for i in range(num):
             im_blob_ad = torch.clip(im_blob + noise, min=0, max=1).data
-            id_features, outputs ,ori_det,ad_det= self.forwardFeature1(im_blob_ad, inds, remain_inds,outputs_ori)
-            noise += self.fgsmV2_1(im_blob_ad, id_features, last_ad_id_features, dets, outputs_ori, outputs, ori_det,ad_det,epsilon=alpha)
+            id_features, outputs, ori_det, ad_det = self.forwardFeature1(im_blob_ad, inds, remain_inds, outputs_ori)
+            noise += self.fgsmV2_1(im_blob_ad, id_features, last_ad_id_features, dets, outputs_ori, outputs, ori_det,
+                                   ad_det, epsilon=alpha)
         return noise
-    def forwardFeature1(self, im_blob, inds, remain_inds,outputs_ori):
+
+    def forwardFeature1(self, im_blob, inds, remain_inds, outputs_ori):
 
         im_blob.requires_grad = True
         self.model.zero_grad()
         output = self.model(im_blob)[-1]
-        ad_hm=output['hm']
-        ori_hm=outputs_ori['hm'].data
-        ad_wh=output['wh']
-        ori_wh=outputs_ori['wh'].data
-        ad_reg=output['reg']
-        ori_reg=outputs_ori['reg'].data
+        ad_hm = output['hm']
+        ori_hm = outputs_ori['hm'].data
+        ad_wh = output['wh']
+        ori_wh = outputs_ori['wh'].data
+        ad_reg = output['reg']
+        ori_reg = outputs_ori['reg'].data
         id_feature = output['id']
         id_feature = F.normalize(id_feature, dim=1)
         id_features = []
@@ -2838,18 +2862,19 @@ class JDETracker(object):
                 id_feature_exp = _tranpose_and_gather_feat_expand(id_feature, inds, bias=(i - 1, j - 1)).squeeze(0)
                 id_features.append(id_feature_exp)
 
-        ad_det,_=mot_decode(ori_hm,ad_wh,ad_reg,cat_spec_wh=self.opt.cat_spec_wh,K=self.opt.K)
-        ori_det,_=mot_decode(ori_hm,ori_wh,ori_reg,cat_spec_wh=self.opt.cat_spec_wh,K=self.opt.K)
-        
+        ad_det, _ = mot_decode(ori_hm, ad_wh, ad_reg, cat_spec_wh=self.opt.cat_spec_wh, K=self.opt.K)
+        ori_det, _ = mot_decode(ori_hm, ori_wh, ori_reg, cat_spec_wh=self.opt.cat_spec_wh, K=self.opt.K)
+
         ori_det = self.post_process(ori_det.clone(), self.meta)
         ori_det = self.merge_outputs([ori_det])[1]
-        ori_det=ori_det[remain_inds]
+        ori_det = ori_det[remain_inds]
         ad_det = self.post_process(ad_det.clone(), self.meta)
         ad_det = self.merge_outputs([ad_det])[1]
-        ad_det=ad_det[remain_inds]
+        ad_det = ad_det[remain_inds]
         for i in range(len(id_features)):
             id_features[i] = id_features[i][remain_inds]
-        return id_features, output,ori_det,ad_det
+        return id_features, output, ori_det, ad_det
+
     def update_attack_z(self, im_blob, img0, **kwargs):
 
         self.frame_id_ += 1
@@ -2864,11 +2889,11 @@ class JDETracker(object):
         inp_width = im_blob.shape[3]
         c = np.array([width / 2., height / 2.], dtype=np.float32)
         s = max(float(inp_width) / float(inp_height) * height, width) * 1.0
-        
+
         meta = {'c': c, 's': s,
                 'out_height': inp_height // self.opt.down_ratio,
                 'out_width': inp_width // self.opt.down_ratio}
-        self.meta=meta
+        self.meta = meta
         ''' Step 1: Network forward, get detections & embeddings'''
         # with torch.no_grad():
         im_blob.requires_grad = True
@@ -2881,26 +2906,27 @@ class JDETracker(object):
 
         reg = output['reg'] if self.opt.reg_offset else None
         dets_raw, inds = mot_decode(hm, wh, reg=reg, cat_spec_wh=self.opt.cat_spec_wh, K=self.opt.K)
-		#[1,k,6],[1,k]
+        # [1,k,6],[1,k]
         id_features = []
         for i in range(3):
             for j in range(3):
-                id_feature_exp = _tranpose_and_gather_feat_expand(id_feature, inds, bias=(i - 1, j - 1)).squeeze(0)#[k,512]
+                id_feature_exp = _tranpose_and_gather_feat_expand(id_feature, inds, bias=(i - 1, j - 1)).squeeze(
+                    0)  # [k,512]
                 id_features.append(id_feature_exp)
 
         id_feature = _tranpose_and_gather_feat_expand(id_feature, inds)
 
-        id_feature = id_feature.squeeze(0)#[k,512]
+        id_feature = id_feature.squeeze(0)  # [k,512]
 
         dets = self.post_process(dets_raw.clone(), meta)
         dets = self.merge_outputs([dets])[1]
 
-        remain_inds = dets[:, 4] > self.opt.conf_thres#X
-        dets = dets[remain_inds]#[X,6]
-        id_feature = id_feature[remain_inds]#[X,512]
+        remain_inds = dets[:, 4] > self.opt.conf_thres  # X
+        dets = dets[remain_inds]  # [X,6]
+        id_feature = id_feature[remain_inds]  # [X,512]
 
         for i in range(len(id_features)):
-            id_features[i] = id_features[i][remain_inds]#9*[X,512]
+            id_features[i] = id_features[i][remain_inds]  # 9*[X,512]
 
         id_feature = id_feature.detach().cpu().numpy()
 
@@ -2937,17 +2963,17 @@ class JDETracker(object):
                 unconfirmed.append(track)
             else:
                 tracked_stracks.append(track)
-        self.unconfirmed_ad_iou=copy.deepcopy(unconfirmed)
-        self.tracked_stracks_ad_iou=copy.deepcopy(tracked_stracks)
+        self.unconfirmed_ad_iou = copy.deepcopy(unconfirmed)
+        self.tracked_stracks_ad_iou = copy.deepcopy(tracked_stracks)
         ''' Step 2: First association, with embedding'''
         strack_pool = joint_stracks(tracked_stracks, self.lost_stracks_)
-        self.strack_pool_ad_iou=copy.deepcopy(strack_pool)
+        self.strack_pool_ad_iou = copy.deepcopy(strack_pool)
         # Predict the current location with KF
-        #for strack in strack_pool:
-            #strack.predict()
+        # for strack in strack_pool:
+        # strack.predict()
         STrack.multi_predict(strack_pool)
         dists = matching.embedding_distance(strack_pool, detections)
-        #dists = matching.gate_cost_matrix(self.kalman_filter, dists, strack_pool, detections)
+        # dists = matching.gate_cost_matrix(self.kalman_filter, dists, strack_pool, detections)
         dists = matching.fuse_motion(self.kalman_filter_, dists, strack_pool, detections)
         matches, u_track, u_detection = matching.linear_assignment(dists, thresh=0.7)
         # import pdb; pdb.set_trace()
@@ -3057,7 +3083,7 @@ class JDETracker(object):
 
         # noise = self.recoverNoise(noise, img0)
         # noise = self.deRecoverNoise(noise, img0)
-        im_blob = torch.clip(im_blob+noise, min=0, max=1)
+        im_blob = torch.clip(im_blob + noise, min=0, max=1)
         # im_blob = (im_blob * 255).int().float() / 255
         l2_dis = (noise ** 2).sum().sqrt().item()
 
@@ -3071,7 +3097,7 @@ class JDETracker(object):
 
         noise = (noise - np.min(noise)) / (np.max(noise) - np.min(noise))
         noise = (noise * 255).astype(np.uint8)
-        return output_stracks_ori,output_stracks, adImg, noise,l2_dis
+        return output_stracks_ori, output_stracks, adImg, noise, l2_dis
 
 
 def joint_stracks(tlista, tlistb):
@@ -3118,6 +3144,7 @@ def remove_duplicate_stracks(stracksa, stracksb):
 def save(obj, name):
     with open(f'/home/derry/Desktop/{name}.pth', 'wb') as f:
         pickle.dump(obj, f)
+
 
 def load(name):
     with open(f'/home/derry/Desktop/{name}.pth', 'rb') as f:
