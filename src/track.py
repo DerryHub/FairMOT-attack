@@ -68,6 +68,7 @@ def cal_iou(bbox, comp_bbox):
     h = np.maximum(0,y_max-y_min)
     area = w * h 
     iou = area/(s0+s1- area)
+    return iou
 
 def get_valid_ids(frame2id, id2frame):
     eval_id = []
@@ -95,10 +96,11 @@ def get_valid_ids(frame2id, id2frame):
 def eval_frame(frame2id,frame_id,persion_id):
     bbox = frame2id[frame_id][persion_id]
     comp_bbox = [bbox for id,bbox in frame2id[frame_id].items() if id != persion_id]
-    return iou_judje(bbox,comp_bbox)
+    return bbox_intersect(bbox,comp_bbox)
 
 def bbox_intersect(bbox,comp_bbox,threshold = 0.4):
     iou = cal_iou(bbox, comp_bbox)
+
     if any( i >= threshold for i in iou):
         return True
     else:
@@ -145,7 +147,7 @@ def eval_attack(origin_path, attack_path):
         
         if len(track_id_set) > 1 :
             success_attack += 1
-            success_attack_id.append(id)
+            success_attack_id.add(id)
     
     
 
@@ -285,7 +287,7 @@ def evaluate_attack(result_filename_ori, result_filename_att):
 
 
 def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None, show_image=True, frame_rate=30):
-    BaseTrack.init()
+    '''BaseTrack.init()
     need_attack_ids = set([])
     suc_attacked_ids = set([])
     frequency_ids = {}
@@ -519,12 +521,13 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
     suc_attacked_ids.update(set(suc_frequency_ids.keys()))
     # save results
     write_results(result_filename, results, data_type)
+    
     if opt.attack == 'single' and opt.attack_id == -1:
         for key in results_att_sg.keys():
             write_results(result_filename.replace('.txt', f'_attack_{key}.txt'), results_att_sg[key], data_type)
     elif opt.attack:
         write_results(result_filename.replace('.txt', '_attack.txt'), results_att, data_type)
-    
+    '''
     if opt.attack == 'multiple':
         success_attack_id,all_attack_id = eval_attack(result_filename, result_filename.replace('.txt', f'_attack.txt'))
 
