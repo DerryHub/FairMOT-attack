@@ -535,18 +535,19 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
         print(f'All attacked ids is {need_attack_ids}')
         print(f'All successfully attacked ids is {suc_attacked_ids}')
         print(f'All unsuccessfully attacked ids is {need_attack_ids - suc_attacked_ids}')
-        print(f'The accuracy is {round(100 * len(suc_attacked_ids) / len(need_attack_ids), 2)}%')
-        print(f'The attacked frames: {sg_attack_frames}\tmin: {min(sg_attack_frames.values())}\t'
-              f'max: {max(sg_attack_frames.values())}\tmean: {sum(sg_attack_frames.values()) / len(sg_attack_frames)}')
+        print(f'The accuracy is {round(100 * len(suc_attacked_ids) / len(need_attack_ids), 2) if len(need_attack_ids) else 0}%')
+        print(f'The attacked frames: {sg_attack_frames}\tmin: {min(sg_attack_frames.values()) if len(need_attack_ids) else None}\t'
+              f'max: {max(sg_attack_frames.values()) if len(need_attack_ids) else None}\tmean: {sum(sg_attack_frames.values()) / len(sg_attack_frames) if len(need_attack_ids) else None}')
+        print(f'The mean L2 distance: {dict(zip(suc_attacked_ids, [sum(l2_distance_sg[k])/len(l2_distance_sg[k]) for k in suc_attacked_ids])) if len(suc_attacked_ids) else None}')
     elif opt.attack == 'multiple':
         success_attack_id, all_attack_id = eval_attack(result_filename, result_filename.replace('.txt', f'_attack.txt'))
-
-        print('@' * 50 + ' single attack accuracy ' + '@' * 50)
+        print('@' * 50 + ' multiple attack accuracy ' + '@' * 50)
         print(f'All attacked ids is {all_attack_id}')
         print(f'All successfully attacked ids is {success_attack_id}')
         print(f'All unsuccessfully attacked ids is {all_attack_id - success_attack_id}')
         print(f'The accuracy is {round(100 * len(success_attack_id) / len(all_attack_id), 2)}%')
         print(f'The attacked frames: {attack_frames}')
+        print(f'The mean L2 distance: {sum(l2_distance) / len(l2_distance) if len(l2_distance) else None}')
     return frame_id, timer.average_time, timer.calls, l2_distance
 
 
@@ -724,7 +725,7 @@ if __name__ == '__main__':
         #               ADL-Rundle-8
         #               ETH-Pedcross2
         #               TUD-Stadtmitte'''
-        seqs_str = '''PETS09-S2L1'''
+        seqs_str = '''KITTI-13'''
         data_root = os.path.join(opt.data_dir, 'MOT15/images/train')
     if opt.val_mot20:
         seqs_str = '''MOT20-01
