@@ -731,8 +731,7 @@ if __name__ == '__main__':
         data_root = os.path.join(opt.data_dir, 'MOT17/images/train')
     if opt.val_mot15:
         seqs_str = '''
-                      KITTI-13
-                      KITTI-17
+                      
                       ETH-Bahnhof
                       ETH-Sunnyday
                       PETS09-S2L1
