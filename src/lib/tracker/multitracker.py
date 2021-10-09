@@ -297,17 +297,16 @@ class JDETracker(object):
             lost_stracks=[],
             removed_stracks=[],
             frame_id=0,
-            ad_last_info={}
+            ad_last_info={},
+            model=None
     ):
         self.opt = opt
-        if opt.gpus[0] >= 0:
-            opt.device = torch.device('cuda')
-        else:
-            opt.device = torch.device('cpu')
         print('Creating model...')
-        self.model = create_model(opt.arch, opt.heads, opt.head_conv)
-        self.model = load_model(self.model, opt.load_model)
-        self.model = self.model.to(opt.device)
+        if model:
+            self.model = model
+        else:
+            self.model = create_model(opt.arch, opt.heads, opt.head_conv)
+            self.model = load_model(self.model, opt.load_model).cuda()
         self.model.eval()
 
         self.log_index = []
@@ -1077,6 +1076,8 @@ class JDETracker(object):
         noise = torch.zeros_like(im_blob)
         im_blob_ori = im_blob.clone().data
         outputs = outputs_ori
+        wh_ori = outputs['wh'].clone().data
+        reg_ori = outputs['reg'].clone().data
         i = 0
         j = -1
         last_ad_id_features = [None for _ in range(len(id_features[0]))]
@@ -1112,6 +1113,7 @@ class JDETracker(object):
                 last_target_dets_center.append((det[:2] + det[2:]) / 2)
 
         hm_index = inds[0][remain_inds]
+        hm_index_ori = copy.deepcopy(hm_index)
 
         adam_m = 0
         adam_v = 0
@@ -1128,17 +1130,17 @@ class JDETracker(object):
                         last_ad_id_feature = torch.from_numpy(last_ad_id_features[attack_ind]).unsqueeze(0).cuda()
                         sim_1 = torch.mm(id_feature[attack_ind:attack_ind + 1], last_ad_id_feature.T).squeeze()
                         sim_2 = torch.mm(id_feature[target_ind:target_ind + 1], last_ad_id_feature.T).squeeze()
-                        loss_feat += sim_2 - sim_1
+                        loss_feat += min(sim_2 - sim_1, 0.3)
                     if last_ad_id_features[target_ind] is not None:
                         last_ad_id_feature = torch.from_numpy(last_ad_id_features[target_ind]).unsqueeze(0).cuda()
                         sim_1 = torch.mm(id_feature[target_ind:target_ind + 1], last_ad_id_feature.T).squeeze()
                         sim_2 = torch.mm(id_feature[attack_ind:attack_ind + 1], last_ad_id_feature.T).squeeze()
-                        loss_feat += sim_2 - sim_1
+                        loss_feat += min(sim_2 - sim_1, 0.3)
                     if last_ad_id_features[attack_ind] is None and last_ad_id_features[target_ind] is None:
                         loss_feat += torch.mm(id_feature[attack_ind:attack_ind + 1],
                                               id_feature[target_ind:target_ind + 1].T).squeeze()
 
-                if i in [10, 20, 30, 40]:
+                if i in [10, 20, 30, 35, 40, 45, 50, 55]:
                     attack_det_center = torch.stack([hm_index[attack_ind] % W, hm_index[attack_ind] // W]).float()
                     target_det_center = torch.stack([hm_index[target_ind] % W, hm_index[target_ind] // W]).float()
                     if last_target_dets_center[index] is not None:
@@ -1159,6 +1161,8 @@ class JDETracker(object):
 
             loss += ((1 - outputs['hm'].view(-1).sigmoid()[hm_index]) ** 2 *
                      torch.log(outputs['hm'].view(-1).sigmoid()[hm_index])).mean()
+            loss -= mse(outputs['wh'].view(-1)[hm_index], wh_ori.view(-1)[hm_index_ori])
+            loss -= mse(outputs['reg'].view(-1)[hm_index], reg_ori.view(-1)[hm_index_ori])
 
             loss.backward()
 
@@ -1196,9 +1200,9 @@ class JDETracker(object):
                 # else:
                 #     j += 1
             # print(torch.cat([index.view(-1, 1) // W, index.view(-1, 1) % W], dim=1))
-            if i > 50:
-                return None, -1
-        return noise, i
+            if i > 80:
+                return noise, i, False
+        return noise, i, True
 
     def bbox_iou_tensor(self, bboxs):
         xy1 = torch.max(bboxs[:, :2], dim=0)[0]
@@ -2379,7 +2383,7 @@ class JDETracker(object):
         target_inds = []
 
         attack = self.opt.attack
-        noise = torch.zeros_like(im_blob)
+        noise = None
         if self.attack_mt and self.frame_id_ > 20 and len(dets) > 0:
             ious = bbox_ious(np.ascontiguousarray(dets[:, :4], dtype=np.float),
                              np.ascontiguousarray(dets[:, :4], dtype=np.float))
@@ -2403,7 +2407,7 @@ class JDETracker(object):
                 attack_inds = np.array(attack_inds)[fit_index]
                 target_inds = np.array(target_inds)[fit_index]
 
-                noise_, attack_iter = self.ifgsm_adam_mt(
+                noise, attack_iter, suc = self.ifgsm_adam_mt(
                     im_blob,
                     img0,
                     id_features,
@@ -2417,25 +2421,28 @@ class JDETracker(object):
                     target_ids=target_ids,
                     target_inds=target_inds
                 )
-                if noise_ is not None:
+                self.low_iou_ids.update(set(attack_ids))
+                if suc:
                     self.attacked_ids.update(set(attack_ids))
-                    self.low_iou_ids.update(set(attack_ids))
                     print(
-                        f'attack ids: {attack_ids}\tattack frame {self.frame_id_}: SUCCESS\tl2 distance: {(noise_ ** 2).sum().sqrt().item()}\titeration: {attack_iter}')
-                    noise = noise_
+                        f'attack ids: {attack_ids}\tattack frame {self.frame_id_}: SUCCESS\tl2 distance: {(noise ** 2).sum().sqrt().item()}\titeration: {attack_iter}')
                 else:
-                    print(f'attack ids: {attack_ids}\tattack frame {self.frame_id_}: FAIL')
+                    print(f'attack ids: {attack_ids}\tattack frame {self.frame_id_}: FAIL\tl2 distance: {(noise ** 2).sum().sqrt().item()}\titeration: {attack_iter}')
 
-        l2_dis = (noise ** 2).sum().sqrt().item()
-        im_blob = torch.clip(im_blob + noise, min=0, max=1)
+        if noise is not None:
+            l2_dis = (noise ** 2).sum().sqrt().item()
+            im_blob = torch.clip(im_blob + noise, min=0, max=1)
 
-        output_stracks_att = self.update(im_blob, img0, **kwargs)
+            noise = self.recoverNoise(noise, img0)
+            adImg = np.clip(img0 + noise, a_min=0, a_max=255)
 
-        noise = self.recoverNoise(noise, img0)
-        adImg = np.clip(img0 + noise, a_min=0, a_max=255)
+            noise = (noise - np.min(noise)) / (np.max(noise) - np.min(noise))
+            noise = (noise * 255).astype(np.uint8)
+        else:
+            l2_dis = None
+            adImg = img0
 
-        noise = (noise - np.min(noise)) / (np.max(noise) - np.min(noise))
-        noise = (noise * 255).astype(np.uint8)
+        output_stracks_att = self.update(im_blob, img0)
 
         return output_stracks_ori, output_stracks_att, adImg, noise, l2_dis
 

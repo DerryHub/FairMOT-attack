@@ -34,7 +34,7 @@ from scipy.optimize import linear_sum_assignment
 import copy
 from cython_bbox import bbox_overlaps as bbox_ious
 
-
+from models.model import create_model, load_model
 
 def read_result(path):
     f = open(path)
@@ -70,7 +70,7 @@ def cal_iou(bbox, comp_bbox):
     h = np.maximum(0,y_max-y_min)
     area = w * h 
     iou = area/(s0+s1- area)
-    return iou
+    return  iou
 
 def get_valid_ids(frame2id, id2frame):
     eval_id = []
@@ -324,6 +324,9 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
     noiseRoot = os.path.join(root, 'noise')
     l2_distance = []
     l2_distance_sg = {}
+
+    model = create_model(opt.arch, opt.heads, opt.head_conv)
+    model = load_model(model, opt.load_model).cuda()
     for path, img, img0 in dataloader:
         if frame_id % 20 == 0:
             logger.info('Processing frame {} ({:.2f} fps)'.format(frame_id, 1. / max(1e-5, timer.average_time)))
@@ -336,7 +339,7 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
 
         if opt.attack:
             if opt.attack == 'single' and opt.attack_id == -1:
-                online_targets_ori = tracker.update(blob, img0, name=path.replace(root_r, ''), track_id=track_id)
+                online_targets_ori = tracker.update(blob, img0, name=path.replace(root_r, ''), track_id=track_id, model=model)
                 dets = []
                 ids = []
 
@@ -367,7 +370,8 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
                             lost_stracks=lost_stracks,
                             removed_stracks=removed_stracks,
                             frame_id=frame_id,
-                            ad_last_info=ad_last_info
+                            ad_last_info=ad_last_info,
+                            model=model
                         )
                         sg_track_ids[attack_id] = {
                             'origin': {'track_id': 1},
@@ -407,6 +411,7 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
                         if suc_frequency_ids[attack_id] > 20:
                             suc_attacked_ids.add(attack_id)
                             del trackers_dic[attack_id]
+                            torch.cuda.empty_cache()
 
                 tracked_stracks = copy.deepcopy(tracker.tracked_stracks)
                 lost_stracks = copy.deepcopy(tracker.lost_stracks)
@@ -542,16 +547,13 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
         print(f'All attacked ids is {need_attack_ids}')
         print(f'All successfully attacked ids is {suc_attacked_ids}')
         print(f'All unsuccessfully attacked ids is {need_attack_ids - suc_attacked_ids}')
-        if len(need_attack_ids) == 0:
-            print('None object to attack!')
-        else:
-            print(f'The accuracy is {round(100 * len(suc_attacked_ids) / len(need_attack_ids), 2)}%')
-        print(f'The attacked frames: {sg_attack_frames}\tmin: {min(sg_attack_frames.values())}\t'
-              f'max: {max(sg_attack_frames.values())}\tmean: {sum(sg_attack_frames.values()) / len(sg_attack_frames)}')
+        print(f'The accuracy is {round(100 * len(suc_attacked_ids) / len(need_attack_ids), 2) if len(need_attack_ids) else 0}%')
+        print(f'The attacked frames: {sg_attack_frames}\tmin: {min(sg_attack_frames.values()) if len(need_attack_ids) else None}\t'
+              f'max: {max(sg_attack_frames.values()) if len(need_attack_ids) else None}\tmean: {sum(sg_attack_frames.values()) / len(sg_attack_frames) if len(need_attack_ids) else None}')
+        print(f'The mean L2 distance: {dict(zip(suc_attacked_ids, [sum(l2_distance_sg[k])/len(l2_distance_sg[k]) for k in suc_attacked_ids])) if len(suc_attacked_ids) else None}')
     elif opt.attack == 'multiple':
         success_attack_id, all_attack_id = eval_attack(result_filename, result_filename.replace('.txt', f'_attack.txt'))
-
-        print('@' * 50 + ' single attack accuracy ' + '@' * 50)
+        print('@' * 50 + ' multiple attack accuracy ' + '@' * 50)
         print(f'All attacked ids is {all_attack_id}')
         print(f'All successfully attacked ids is {success_attack_id}')
         print(f'All unsuccessfully attacked ids is {all_attack_id - success_attack_id}')
@@ -560,7 +562,7 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
         else:
             print(f'The accuracy is {round(100 * len(success_attack_id) / len(all_attack_id), 2)}%')
         print(f'The attacked frames: {attack_frames}')
-
+        print(f'The mean L2 distance: {sum(l2_distance) / len(l2_distance) if len(l2_distance) else None}')
     return frame_id, timer.average_time, timer.calls, l2_distance
 
 
@@ -729,6 +731,7 @@ if __name__ == '__main__':
         data_root = os.path.join(opt.data_dir, 'MOT17/images/train')
     if opt.val_mot15:
         seqs_str = '''
+                      KITTI-13
                       KITTI-17
                       ETH-Bahnhof
                       ETH-Sunnyday
