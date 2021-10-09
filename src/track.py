@@ -34,7 +34,7 @@ from scipy.optimize import linear_sum_assignment
 import copy
 from cython_bbox import bbox_overlaps as bbox_ious
 
-
+from models.model import create_model, load_model
 
 def read_result(path):
     f = open(path)
@@ -68,6 +68,7 @@ def cal_iou(bbox, comp_bbox):
     h = np.maximum(0,y_max-y_min)
     area = w * h 
     iou = area/(s0+s1- area)
+    return  iou
 
 def get_valid_ids(frame2id, id2frame):
     eval_id = []
@@ -95,7 +96,7 @@ def get_valid_ids(frame2id, id2frame):
 def eval_frame(frame2id,frame_id,persion_id):
     bbox = frame2id[frame_id][persion_id]
     comp_bbox = [bbox for id,bbox in frame2id[frame_id].items() if id != persion_id]
-    return iou_judje(bbox,comp_bbox)
+    return bbox_intersect(bbox,comp_bbox)
 
 def bbox_intersect(bbox,comp_bbox,threshold = 0.4):
     iou = cal_iou(bbox, comp_bbox)
@@ -315,6 +316,9 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
     noiseRoot = os.path.join(root, 'noise')
     l2_distance = []
     l2_distance_sg = {}
+
+    model = create_model(opt.arch, opt.heads, opt.head_conv)
+    model = load_model(model, opt.load_model).cuda()
     for path, img, img0 in dataloader:
         if frame_id % 20 == 0:
             logger.info('Processing frame {} ({:.2f} fps)'.format(frame_id, 1. / max(1e-5, timer.average_time)))
@@ -327,7 +331,7 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
 
         if opt.attack:
             if opt.attack == 'single' and opt.attack_id == -1:
-                online_targets_ori = tracker.update(blob, img0, name=path.replace(root_r, ''), track_id=track_id)
+                online_targets_ori = tracker.update(blob, img0, name=path.replace(root_r, ''), track_id=track_id, model=model)
                 dets = []
                 ids = []
 
@@ -358,7 +362,8 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
                             lost_stracks=lost_stracks,
                             removed_stracks=removed_stracks,
                             frame_id=frame_id,
-                            ad_last_info=ad_last_info
+                            ad_last_info=ad_last_info,
+                            model=model
                         )
                         sg_track_ids[attack_id] = {
                             'origin': {'track_id': 1},
@@ -398,6 +403,7 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
                         if suc_frequency_ids[attack_id] > 20:
                             suc_attacked_ids.add(attack_id)
                             del trackers_dic[attack_id]
+                            torch.cuda.empty_cache()
 
                 tracked_stracks = copy.deepcopy(tracker.tracked_stracks)
                 lost_stracks = copy.deepcopy(tracker.lost_stracks)
