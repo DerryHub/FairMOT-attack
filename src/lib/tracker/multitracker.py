@@ -2421,10 +2421,10 @@ class JDETracker(object):
                     self.attacked_ids.update(set(attack_ids))
                     self.low_iou_ids.update(set(attack_ids))
                     print(
-                        f'attack frame {self.frame_id_}: SUCCESS\tl2 distance: {(noise_ ** 2).sum().sqrt().item()}\titeration: {attack_iter}')
+                        f'attack ids: {attack_ids}\tattack frame {self.frame_id_}: SUCCESS\tl2 distance: {(noise_ ** 2).sum().sqrt().item()}\titeration: {attack_iter}')
                     noise = noise_
                 else:
-                    print(f'attack frame {self.frame_id_}: FAIL')
+                    print(f'attack ids: {attack_ids}\tattack frame {self.frame_id_}: FAIL')
 
         l2_dis = (noise ** 2).sum().sqrt().item()
         im_blob = torch.clip(im_blob + noise, min=0, max=1)

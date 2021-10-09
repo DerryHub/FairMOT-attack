@@ -145,11 +145,8 @@ def eval_attack(origin_path, attack_path):
         
         if len(track_id_set) > 1 :
             success_attack += 1
-            success_attack_id.append(id)
-    
-    
+            success_attack_id.add(id)
 
-    
     return success_attack_id,all_attack_id
 
 
@@ -300,6 +297,7 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
     track_id = {'track_id': 1}
     sg_track_ids = {}
     sg_attack_frames = {}
+    attack_frames = 0
 
     if save_dir:
         mkdir_if_missing(save_dir)
@@ -423,6 +421,7 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
                 )
                 if l2_dis is not None:
                     l2_distance.append(l2_dis)
+                    attack_frames += 1
             elif opt.attack == 'multiple_z':
                 online_targets_ori, output_stracks_att, adImg, noise, l2_dis = tracker.update_attack_z(
                     blob,
@@ -524,17 +523,6 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
             write_results(result_filename.replace('.txt', f'_attack_{key}.txt'), results_att_sg[key], data_type)
     elif opt.attack:
         write_results(result_filename.replace('.txt', '_attack.txt'), results_att, data_type)
-    
-    if opt.attack == 'multiple':
-        success_attack_id,all_attack_id = eval_attack(result_filename, result_filename.replace('.txt', f'_attack.txt'))
-
-        print('@' * 50 + ' single attack accuracy ' + '@' * 50)
-        print(f'All attacked ids is {all_attack_id}')
-        print(f'All successfully attacked ids is {success_attack_id}')
-        print(f'All unsuccessfully attacked ids is {all_attack_id - success_attack_id}')
-        print(f'The accuracy is {round(100 * len(success_attack_id) / len(all_attack_id), 2)}%')
-       
-
 
     if opt.attack == 'single' and opt.attack_id == -1:
         print('@' * 50 + ' single attack accuracy ' + '@' * 50)
@@ -544,6 +532,15 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
         print(f'The accuracy is {round(100 * len(suc_attacked_ids) / len(need_attack_ids), 2)}%')
         print(f'The attacked frames: {sg_attack_frames}\tmin: {min(sg_attack_frames.values())}\t'
               f'max: {max(sg_attack_frames.values())}\tmean: {sum(sg_attack_frames.values()) / len(sg_attack_frames)}')
+    elif opt.attack == 'multiple':
+        success_attack_id, all_attack_id = eval_attack(result_filename, result_filename.replace('.txt', f'_attack.txt'))
+
+        print('@' * 50 + ' single attack accuracy ' + '@' * 50)
+        print(f'All attacked ids is {all_attack_id}')
+        print(f'All successfully attacked ids is {success_attack_id}')
+        print(f'All unsuccessfully attacked ids is {all_attack_id - success_attack_id}')
+        print(f'The accuracy is {round(100 * len(success_attack_id) / len(all_attack_id), 2)}%')
+        print(f'The attacked frames: {attack_frames}')
     return frame_id, timer.average_time, timer.calls, l2_distance
 
 
