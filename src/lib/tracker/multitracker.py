@@ -1421,7 +1421,7 @@ class JDETracker(object):
         ae_attack_inds = np.concatenate(ae_attack_inds)
         ae_target_inds = np.concatenate(ae_target_inds)
 
-        id_features_ = [torch.zeros_like(id_features[0]) for _ in range(len(id_features))]
+        id_features_ = [torch.zeros([len(dets_), id_features[0].size(1)]).to(id_features[0].device) for _ in range(len(id_features))]
         for i in range(9):
             id_features_[i][row_inds] = id_features[i][col_inds]
 
