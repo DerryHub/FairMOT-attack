@@ -1003,8 +1003,8 @@ class JDETracker(object):
                         target_center_delta /= torch.max(torch.abs(target_center_delta))
                         target_det_center = torch.round(target_det_center - target_center_delta).int()
                         hm_index[target_ind] = target_det_center[0] + target_det_center[1] * W
-            if i == 40:
-                lr /= 10
+            # if i == 40:
+            #     lr /= 10
 
             loss += ((1 - outputs['hm'].view(-1).sigmoid()[hm_index]) ** 2 *
                      torch.log(outputs['hm'].view(-1).sigmoid()[hm_index])).mean()
@@ -2079,6 +2079,30 @@ class JDETracker(object):
                                 suc = 2
                                 print(
                                     f'attack id: {attack_id}\tattack frame {self.frame_id_}: FAIL\tl2 distance: {(noise ** 2).sum().sqrt().item()}\titeration: {attack_iter}')
+                        elif ious[attack_ind][target_ind] > self.attack_iou_thr and self.CheckFit(dets, id_feature, [target_id], [target_ind]):
+                            noise, attack_iter, suc = self.ifgsm_adam_sg(
+                                im_blob,
+                                img0,
+                                id_features,
+                                dets,
+                                inds,
+                                remain_inds,
+                                last_info=self.ad_last_info,
+                                outputs_ori=output,
+                                attack_id=attack_id,
+                                attack_ind=attack_ind,
+                                target_id=target_id,
+                                target_ind=target_ind
+                            )
+                            self.attack_iou_thr = 0
+                            if suc:
+                                suc = 1
+                                print(
+                                    f'attack id: {attack_id}\tattack frame {self.frame_id_}: SUCCESS\tl2 distance: {(noise ** 2).sum().sqrt().item()}\titeration: {attack_iter}')
+                            else:
+                                suc = 2
+                                print(
+                                    f'attack id: {attack_id}\tattack frame {self.frame_id_}: FAIL\tl2 distance: {(noise ** 2).sum().sqrt().item()}\titeration: {attack_iter}')
                         else:
                             suc = 3
                         if ious[attack_ind][target_ind] == 0:
@@ -2356,7 +2380,7 @@ class JDETracker(object):
 
         attack = self.opt.attack
         noise = torch.zeros_like(im_blob)
-        if self.attack_mt and self.frame_id_ > 20:
+        if self.attack_mt and self.frame_id_ > 20 and len(dets) > 0:
             ious = bbox_ious(np.ascontiguousarray(dets[:, :4], dtype=np.float),
                              np.ascontiguousarray(dets[:, :4], dtype=np.float))
             ious[range(len(dets)), range(len(dets))] = 0

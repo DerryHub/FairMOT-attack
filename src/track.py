@@ -280,6 +280,7 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
                         suc_frequency_ids[attack_id] += 1
                         if suc_frequency_ids[attack_id] > 20:
                             suc_attacked_ids.add(attack_id)
+                            del trackers_dic[attack_id]
 
                 tracked_stracks = copy.deepcopy(tracker.tracked_stracks)
                 lost_stracks = copy.deepcopy(tracker.lost_stracks)
@@ -575,7 +576,7 @@ if __name__ == '__main__':
         #               MOT17-10-SDP
         #               MOT17-11-SDP
         #               MOT17-13-SDP'''
-        seqs_str = '''MOT17-04-SDP'''
+        seqs_str = '''MOT17-11-SDP'''
         data_root = os.path.join(opt.data_dir, 'MOT17/images/train')
     if opt.val_mot15:
         # seqs_str = '''KITTI-13
@@ -589,7 +590,7 @@ if __name__ == '__main__':
         #               ADL-Rundle-8
         #               ETH-Pedcross2
         #               TUD-Stadtmitte'''
-        seqs_str = '''PETS09-S2L1'''
+        seqs_str = '''KITTI-13'''
         data_root = os.path.join(opt.data_dir, 'MOT15/images/train')
     if opt.val_mot20:
         seqs_str = '''MOT20-01
