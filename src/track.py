@@ -313,7 +313,9 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
 
     if save_dir:
         mkdir_if_missing(save_dir)
-    tracker = JDETracker(opt, frame_rate=frame_rate)
+    model = create_model(opt.arch, opt.heads, opt.head_conv)
+    model = load_model(model, opt.load_model).cuda()
+    tracker = JDETracker(opt, frame_rate=frame_rate, model=model)
     timer = Timer()
     results = []
     results_att = []
@@ -328,8 +330,6 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
     l2_distance = []
     l2_distance_sg = {}
 
-    model = create_model(opt.arch, opt.heads, opt.head_conv)
-    model = load_model(model, opt.load_model).cuda()
     for path, img, img0 in dataloader:
         if frame_id % 20 == 0:
             logger.info('Processing frame {} ({:.2f} fps)'.format(frame_id, 1. / max(1e-5, timer.average_time)))
@@ -341,9 +341,8 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
         blob = torch.from_numpy(img).cuda().unsqueeze(0)
 
         if opt.attack:
-            if opt.attack == 'single' and opt.attack_id == -1:
-                online_targets_ori = tracker.update(blob, img0, name=path.replace(root_r, ''), track_id=track_id,
-                                                    model=model)
+            if opt.attack == 'single' and opt.attack_id == -1 and opt.method == 'ids':
+                online_targets_ori = tracker.update(blob, img0, name=path.replace(root_r, ''), track_id=track_id)
                 dets = []
                 ids = []
 
@@ -421,7 +420,75 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
                 lost_stracks = copy.deepcopy(tracker.lost_stracks)
                 removed_stracks = copy.deepcopy(tracker.removed_stracks)
                 ad_last_info = copy.deepcopy(tracker.ad_last_info)
-            elif opt.attack == 'single':
+            elif opt.attack == 'single' and opt.attack_id == -1 and opt.method == 'feat':
+                online_targets_ori = tracker.update(blob, img0, name=path.replace(root_r, ''), track_id=track_id)
+
+                for strack in online_targets_ori:
+                    if strack.track_id not in frequency_ids:
+                        frequency_ids[strack.track_id] = 0
+                    frequency_ids[strack.track_id] += 1
+                    if frequency_ids[strack.track_id] > tracker.FRAME_THR:
+                        need_attack_ids.add(strack.track_id)
+
+                for attack_id in need_attack_ids:
+                    if attack_id in suc_attacked_ids:
+                        continue
+                    if attack_id not in trackers_dic:
+                        trackers_dic[attack_id] = JDETracker(
+                            opt,
+                            frame_rate=frame_rate,
+                            tracked_stracks=tracked_stracks,
+                            lost_stracks=lost_stracks,
+                            removed_stracks=removed_stracks,
+                            frame_id=frame_id,
+                            ad_last_info=ad_last_info,
+                            model=model
+                        )
+                        sg_track_ids[attack_id] = {
+                            'origin': {'track_id': 1},
+                            'attack': {'track_id': 1}
+                        }
+                    _, output_stracks_att, adImg, noise, l2_dis, suc = trackers_dic[attack_id].update_attack_sg(
+                        blob,
+                        img0,
+                        name=path.replace(root_r, ''),
+                        attack_id=attack_id,
+                        track_id=sg_track_ids[attack_id]
+                    )
+                    sg_track_outputs[attack_id] = {}
+                    sg_track_outputs[attack_id]['output_stracks_att'] = output_stracks_att
+                    sg_track_outputs[attack_id]['adImg'] = adImg
+                    sg_track_outputs[attack_id]['noise'] = noise
+                    if suc in [1, 2]:
+                        if attack_id not in sg_attack_frames:
+                            sg_attack_frames[attack_id] = 0
+                        sg_attack_frames[attack_id] += 1
+                    if attack_id not in results_att_sg:
+                        results_att_sg[attack_id] = []
+                    if attack_id not in l2_distance_sg:
+                        l2_distance_sg[attack_id] = []
+                    if l2_dis is not None:
+                        l2_distance_sg[attack_id].append(l2_dis)
+                    if suc == 1:
+                        suc_frequency_ids[attack_id] = 1
+                    elif suc == 2:
+                        suc_frequency_ids.pop(attack_id, None)
+                    elif suc == 3:
+                        if attack_id not in suc_frequency_ids:
+                            suc_frequency_ids[attack_id] = 0
+                        suc_frequency_ids[attack_id] += 1
+                    elif attack_id in suc_frequency_ids:
+                        suc_frequency_ids[attack_id] += 1
+                        if suc_frequency_ids[attack_id] > 20:
+                            suc_attacked_ids.add(attack_id)
+                            del trackers_dic[attack_id]
+                            torch.cuda.empty_cache()
+
+                tracked_stracks = copy.deepcopy(tracker.tracked_stracks)
+                lost_stracks = copy.deepcopy(tracker.lost_stracks)
+                removed_stracks = copy.deepcopy(tracker.removed_stracks)
+                ad_last_info = copy.deepcopy(tracker.ad_last_info)
+            elif opt.attack == 'single' and opt.method == 'ids':
                 assert opt.attack_id > 0
                 online_targets_ori, output_stracks_att, adImg, noise, l2_dis, suc = tracker.update_attack_sg(
                     blob,
@@ -431,8 +498,27 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
                 )
                 if l2_dis is not None:
                     l2_distance.append(l2_dis)
-            elif opt.attack == 'multiple':
+            elif opt.attack == 'single' and opt.method == 'feat':
+                assert opt.attack_id > 0
+                online_targets_ori, output_stracks_att, adImg, noise, l2_dis, suc = tracker.update_attack_sg_feat(
+                    blob,
+                    img0,
+                    name=path.replace(root_r, ''),
+                    attack_id=opt.attack_id
+                )
+                if l2_dis is not None:
+                    l2_distance.append(l2_dis)
+            elif opt.attack == 'multiple' and opt.method == 'ids':
                 online_targets_ori, output_stracks_att, adImg, noise, l2_dis = tracker.update_attack_mt(
+                    blob,
+                    img0,
+                    name=path.replace(root_r, '')
+                )
+                if l2_dis is not None:
+                    l2_distance.append(l2_dis)
+                    attack_frames += 1
+            elif opt.attack == 'multiple' and opt.method == 'feat':
+                online_targets_ori, output_stracks_att, adImg, noise, l2_dis = tracker.update_attack_mt_feat(
                     blob,
                     img0,
                     name=path.replace(root_r, '')
@@ -661,11 +747,11 @@ if __name__ == '__main__':
     opt = opts().init()
 
     if opt.attack == 'single' and opt.attack_id == -1:
-        opt.output_dir = os.path.join(opt.output_dir, f'{opt.attack}_all')
+        opt.output_dir = os.path.join(opt.output_dir, f'{opt.attack}_all_{opt.method}')
     elif opt.attack == 'single':
-        opt.output_dir = os.path.join(opt.output_dir, f'{opt.attack}_{opt.attack_id}')
+        opt.output_dir = os.path.join(opt.output_dir, f'{opt.attack}_{opt.attack_id}_{opt.method}')
     elif opt.attack == 'multiple':
-        opt.output_dir = os.path.join(opt.output_dir, opt.attack)
+        opt.output_dir = os.path.join(opt.output_dir, f'{opt.attack}_{opt.method}')
     elif opt.attack == 'multiple_z':
         opt.output_dir = os.path.join(opt.output_dir, opt.attack)
     elif not opt.attack:
