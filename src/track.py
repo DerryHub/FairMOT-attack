@@ -654,7 +654,7 @@ def main(opt, data_root='/data/MOT16/train', det_root=None, seqs=('MOT16-05',), 
 
 
 if __name__ == '__main__':
-    os.environ['CUDA_VISIBLE_DEVICES'] = '2'
+    os.environ['CUDA_VISIBLE_DEVICES'] = '1'
     opt = opts().init()
 
     if opt.attack == 'single' and opt.attack_id == -1:
@@ -732,16 +732,18 @@ if __name__ == '__main__':
     if opt.val_mot15:
         seqs_str = '''
                       
-                      ETH-Bahnhof
-                      ETH-Sunnyday
-                      PETS09-S2L1
-                      TUD-Campus
-                      TUD-Stadtmitte
-                      ADL-Rundle-6
-                      ADL-Rundle-8
-                      ETH-Pedcross2
-                      TUD-Stadtmitte'''
-        # seqs_str = '''KITTI-13 PETS09-S2L1'''
+                      KITTI-13
+                    '''
+                    #   ETH-Sunnyday
+                    #   PETS09-S2L1
+                    #   TUD-Campus
+                    #   TUD-Stadtmitte
+                    #   ADL-Rundle-6
+                    #   ADL-Rundle-8
+                    #   ETH-Pedcross2
+                    #   TUD-Stadtmitte
+                    
+        # seqs_str = '''KITTI-13 PETS09-S2L1 ETH-Bahnhof'''
         data_root = os.path.join(opt.data_dir, 'MOT15/images/train')
     if opt.val_mot20:
         seqs_str = '''MOT20-01
