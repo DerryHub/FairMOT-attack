@@ -51,14 +51,10 @@ class MultipleEval:
         for line in lines:
             frame, id = map(int, line.strip('\n').split(',')[:2])
             bbox = list(map(float, line.strip('\n').split(',')[2:-4]))
-
             frame2id.setdefault(frame, {})
             id2frame.setdefault(id, {})
-            if id in frame2id[frame] or frame in id2frame[id]:
-                print('error')
             frame2id[frame][id] = bbox
             id2frame[id][frame] = bbox
-
         return frame2id, id2frame
 
     @staticmethod
@@ -89,20 +85,17 @@ class MultipleEval:
 
     def get_valid_ids(self, frame2id, id2frame):
         eval_id = []
-
         valid_id2frame = {}
         for id, frame in id2frame.items():
             if len(frame) > self.start_frame:
                 eval_id.append(id)
                 valid_frames = list(id2frame[id].keys())
                 valid_frames.sort()
-                
                 for frame in valid_frames[10:]:
 
                     if self.eval_frame(frame2id, frame, id):
                         if id not in valid_id2frame:
                             valid_id2frame[id] = {}
-                            
                             valid_id2frame[id]['frame2bbox'] = id2frame[id]
                             valid_id2frame[id]['frames'] = list(id2frame[id].keys())
                             valid_id2frame[id]['intersect_frames'] = [frame]
@@ -115,14 +108,12 @@ class MultipleEval:
         bbox = frame2id[frame_id][persion_id]
         bbox = np.array([bbox])
         bbox[:,2:] = bbox[:,2:] + bbox[:,:2]
-
-        
         comp_bbox = np.array([bbox for id, bbox in frame2id[frame_id].items() if id != persion_id])
+
         if len(comp_bbox) == 0:
             return False
 
         comp_bbox[:,2:] = comp_bbox[:,2:] + comp_bbox[:,:2]
-        
         ious = bbox_ious(bbox,comp_bbox)
         
         if (ious > self.iou_thr).any():
@@ -135,7 +126,6 @@ class MultipleEval:
         origin_frame2id, origin_id2frame = self.read_result(origin_path)
         attack_frame2id, attack_id2frame = self.read_result(attack_path)
         
-
         valid_id2frame = self.get_valid_ids(origin_frame2id, origin_id2frame)
         valid_id_track_pari = self.tracks_pari(origin_frame2id, attack_frame2id, valid_id2frame)
         
@@ -147,7 +137,6 @@ class MultipleEval:
             track_id_set = set(track_id)
             if -1 in track_id:
                 track_id.remove(-1)
-
             if len(track_id_set) > 1:
                 success_attack += 1
                 success_attack_id.add(id)
@@ -571,6 +560,7 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
         else:
             online_targets_ori = tracker.update(blob, img0, name=path.replace(root_r, ''))
 
+        # import pdb;pdb.set_trace()
         online_tlwhs = []
         online_ids = []
         for t in online_targets_ori:
@@ -667,6 +657,7 @@ def main(opt, data_root='/data/MOT16/train', det_root=None, seqs=('MOT16-05',), 
     n_frame = 0
     timer_avgs, timer_calls = [], []
     for seq in seqs:
+        # import pdb;pdb.set_trace()
         output_dir = os.path.join(data_root, '..', 'outputs', exp_name, seq) if save_images or save_videos else None
         logger.info('start seq: {}'.format(seq))
         dataloader = datasets.LoadImages(osp.join(data_root, seq, 'img1'), opt.img_size)
