@@ -123,6 +123,7 @@ class MultipleEval:
         
         ious = bbox_ious(bbox,comp_bbox)
         if (ious > self.iou_thr).any():
+            # import pdb;pdb.set_trace()
             return True
         return False
 
@@ -304,7 +305,7 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
         mkdir_if_missing(save_dir)
     
     tracker = JDETracker(opt, frame_rate=frame_rate)
-    '''
+    
     timer = Timer()
     results = []
     results_att = []
@@ -533,7 +534,7 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
             write_results(result_filename.replace('.txt', f'_attack_{key}.txt'), results_att_sg[key], data_type)
     elif opt.attack:
         write_results(result_filename.replace('.txt', '_attack.txt'), results_att, data_type)
-    '''
+    
     if opt.attack == 'single' and opt.attack_id == -1:
         print('@' * 50 + ' single attack accuracy ' + '@' * 50)
         print(f'All attacked ids is {need_attack_ids}')
