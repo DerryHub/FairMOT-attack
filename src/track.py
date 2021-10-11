@@ -51,37 +51,40 @@ class MultipleEval:
         for line in lines:
             frame, id = map(int, line.strip('\n').split(',')[:2])
             bbox = list(map(float, line.strip('\n').split(',')[2:-4]))
-            # print( frame,id,bbox)
             frame2id.setdefault(frame, {})
             id2frame.setdefault(id, {})
-            if id in frame2id[frame] or frame in id2frame[id]:
-                print('error')
             frame2id[frame][id] = bbox
             id2frame[id][frame] = bbox
-
         return frame2id, id2frame
 
     @staticmethod
-    def cal_iou(bbox, comp_bbox):
-        bbox = np.array(bbox)
-        comp_bbox = np.array(comp_bbox)
-        s0 = bbox[-1] * bbox[-2]
+    def tracks_pari(origin_frame2id, attack_frame2id, valid_id2frame):
+        tracks_pair_dic = {}
+        for id,info in valid_id2frame.items():
+            tracks_pair_dic[id] = dict((frame_id,-1) for frame_id in info['frames'])
 
-        s1 = comp_bbox[:, -2] * comp_bbox[:, -1]
+        for frame_id,frame_info in origin_frame2id.items():
+                origin_bbox_info = [ [id,bbox] for id,bbox  in frame_info.items()]
+                origin_bbox =np.array([info[1] for info in origin_bbox_info])
+                origin_id = [info[0] for info in origin_bbox_info]
+                attack_bbox_info = [ [id,bbox] for id,bbox  in attack_frame2id[frame_id].items()    ]
+                attack_bbox = np.array([info[1] for info in attack_bbox_info])
+                attack_id = [info[0] for info in attack_bbox_info]
+                origin_bbox[:,2:] = origin_bbox[:,2:] + origin_bbox[:,:2]
+                attack_bbox[:,2:] = attack_bbox[:,2:] + attack_bbox[:,:2]
+                iou = bbox_ious(origin_bbox, attack_bbox)
+                origin_inds,attack_inds = linear_sum_assignment(1-iou)
 
-        x_min = np.maximum(bbox[0], comp_bbox[:, 0])
-        y_min = np.maximum(bbox[1], comp_bbox[:, 1])
-        x_max = np.minimum(bbox[0] + bbox[2], comp_bbox[:, 0] + comp_bbox[:, 2])
-        y_max = np.minimum(bbox[1] + bbox[3], comp_bbox[:, 1] + comp_bbox[:, 3])
-        w = np.maximum(0, x_max - x_min)
-        h = np.maximum(0, y_max - y_min)
-        area = w * h
-        iou = area / (s0 + s1 - area)
-        return iou
+                for origin_ind,attack_ind in zip(origin_inds,attack_inds):
+                    if origin_id[origin_ind] in valid_id2frame and iou[origin_ind,attack_ind] > 0.5:
+                        tracks_pair_dic[origin_id[origin_ind]][frame_id] = attack_id[attack_ind]
+                    else:
+                        continue
+        return tracks_pair_dic
+
 
     def get_valid_ids(self, frame2id, id2frame):
         eval_id = []
-
         valid_id2frame = {}
         for id, frame in id2frame.items():
             if len(frame) > self.start_frame:
@@ -89,73 +92,51 @@ class MultipleEval:
                 valid_frames = list(id2frame[id].keys())
                 valid_frames.sort()
                 for frame in valid_frames[10:]:
+
                     if self.eval_frame(frame2id, frame, id):
                         if id not in valid_id2frame:
                             valid_id2frame[id] = {}
-                            # valid_id2frame[id]['frame2bbox'] = dict((key,value) for key, value in id2frame[id].items() if key in valid_frames[10:])
                             valid_id2frame[id]['frame2bbox'] = id2frame[id]
                             valid_id2frame[id]['frames'] = list(id2frame[id].keys())
                             valid_id2frame[id]['intersect_frames'] = [frame]
                         else:
                             valid_id2frame[id]['intersect_frames'].append(frame)
-
+        
         return valid_id2frame
 
     def eval_frame(self, frame2id, frame_id, persion_id):
         bbox = frame2id[frame_id][persion_id]
-        comp_bbox = [bbox for id, bbox in frame2id[frame_id].items() if id != persion_id]
+        bbox = np.array([bbox])
+        bbox[:,2:] = bbox[:,2:] + bbox[:,:2]
+        comp_bbox = np.array([bbox for id, bbox in frame2id[frame_id].items() if id != persion_id])
+
         if len(comp_bbox) == 0:
             return False
 
-        return self.bbox_intersect(bbox, comp_bbox)
-
-    def bbox_intersect(self, bbox, comp_bbox):
-        iou = self.cal_iou(bbox, comp_bbox)
-
-        if any(i >= self.iou_thr for i in iou):
+        comp_bbox[:,2:] = comp_bbox[:,2:] + comp_bbox[:,:2]
+        ious = bbox_ious(bbox,comp_bbox)
+        
+        if (ious > self.iou_thr).any():
             return True
-        else:
-            return False
+        return False
 
-    def get_pari_id(self, bbox, comp_bbox):
-        iou = self.cal_iou(bbox, comp_bbox)
-        index = np.argmax(iou)
-        if iou[index] < 0.5:
-            return -1
-        else:
-            return index
 
-    def get_predict_trackId(self, valid_id2frame, attack_frame2id):
-        valid_id2preid = {}
-        for id, track_info in valid_id2frame.items():
-            pre_frame2id = {}
-            for frame, bbox in track_info['frame2bbox'].items():
-                comp_bbox_info = [[id, bbox] for id, bbox in attack_frame2id[frame].items()]
-                comp_bbox = [info[1] for info in comp_bbox_info]
-                comp_id = [info[0] for info in comp_bbox_info]
-                id_index = self.get_pari_id(bbox, comp_bbox)
-                pre_frame2id[frame] = comp_id[id_index] if id_index != -1 else -1
-            valid_id2frame[id]['pre_frame2id'] = pre_frame2id
-            valid_id2preid[id] = {}
-            valid_id2preid[id]['pre_frame2id'] = pre_frame2id
-
-        return valid_id2frame, valid_id2preid
 
     def __call__(self, origin_path, attack_path):
         origin_frame2id, origin_id2frame = self.read_result(origin_path)
         attack_frame2id, attack_id2frame = self.read_result(attack_path)
-
+        
         valid_id2frame = self.get_valid_ids(origin_frame2id, origin_id2frame)
-        valid_id2frame, valid_id2preid = self.get_predict_trackId(valid_id2frame, attack_frame2id)
+        valid_id_track_pari = self.tracks_pari(origin_frame2id, attack_frame2id, valid_id2frame)
+        
         success_attack = 0
         success_attack_id = set([])
-        all_attack_id = set(valid_id2preid.keys())
-        for id, track_info in valid_id2preid.items():
-            track_id = [pre_track_id for frame_id, pre_track_id in track_info['pre_frame2id'].items()]
+        all_attack_id = set(valid_id_track_pari.keys())
+        for id, track_info in valid_id_track_pari.items():
+            track_id = [pre_track_id for frame_id, pre_track_id in track_info.items()]
             track_id_set = set(track_id)
             if -1 in track_id:
                 track_id.remove(-1)
-
             if len(track_id_set) > 1:
                 success_attack += 1
                 success_attack_id.add(id)
@@ -310,7 +291,7 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
     sg_track_ids = {}
     sg_attack_frames = {}
     attack_frames = 0
-
+    
     if save_dir:
         mkdir_if_missing(save_dir)
     model = create_model(opt.arch, opt.heads, opt.head_conv)
@@ -329,7 +310,7 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
     noiseRoot = os.path.join(root, 'noise')
     l2_distance = []
     l2_distance_sg = {}
-
+    
     for path, img, img0 in dataloader:
         if frame_id % 20 == 0:
             logger.info('Processing frame {} ({:.2f} fps)'.format(frame_id, 1. / max(1e-5, timer.average_time)))
@@ -579,6 +560,7 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
         else:
             online_targets_ori = tracker.update(blob, img0, name=path.replace(root_r, ''))
 
+        # import pdb;pdb.set_trace()
         online_tlwhs = []
         online_ids = []
         for t in online_targets_ori:
@@ -631,7 +613,7 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
             write_results(result_filename.replace('.txt', f'_attack_{key}.txt'), results_att_sg[key], data_type)
     elif opt.attack:
         write_results(result_filename.replace('.txt', '_attack.txt'), results_att, data_type)
-
+    
     if opt.attack == 'single' and opt.attack_id == -1:
         print('@' * 50 + ' single attack accuracy ' + '@' * 50)
         print(f'All attacked ids is {need_attack_ids}')
@@ -675,6 +657,7 @@ def main(opt, data_root='/data/MOT16/train', det_root=None, seqs=('MOT16-05',), 
     n_frame = 0
     timer_avgs, timer_calls = [], []
     for seq in seqs:
+        # import pdb;pdb.set_trace()
         output_dir = os.path.join(data_root, '..', 'outputs', exp_name, seq) if save_images or save_videos else None
         logger.info('start seq: {}'.format(seq))
         dataloader = datasets.LoadImages(osp.join(data_root, seq, 'img1'), opt.img_size)
@@ -746,7 +729,7 @@ def main(opt, data_root='/data/MOT16/train', det_root=None, seqs=('MOT16-05',), 
 
 
 if __name__ == '__main__':
-    os.environ['CUDA_VISIBLE_DEVICES'] = '2'
+    os.environ['CUDA_VISIBLE_DEVICES'] = '1'
     opt = opts().init()
 
     if opt.attack == 'single' and opt.attack_id == -1:
@@ -822,19 +805,20 @@ if __name__ == '__main__':
         seqs_str = '''MOT17-11-SDP'''
         data_root = os.path.join(opt.data_dir, 'MOT17/images/train')
     if opt.val_mot15:
-        # seqs_str = '''
-        #               KITTI-13
-        #               KITTI-17
-        #               ETH-Bahnhof
-        #               ETH-Sunnyday
-        #               PETS09-S2L1
-        #               TUD-Campus
-        #               TUD-Stadtmitte
-        #               ADL-Rundle-6
-        #               ADL-Rundle-8
-        #               ETH-Pedcross2
-        #               TUD-Stadtmitte'''
-        seqs_str = '''KITTI-13'''
+        seqs_str = '''
+                      
+                      KITTI-13
+                    '''
+                    #   ETH-Sunnyday
+                    #   PETS09-S2L1
+                    #   TUD-Campus
+                    #   TUD-Stadtmitte
+                    #   ADL-Rundle-6
+                    #   ADL-Rundle-8
+                    #   ETH-Pedcross2
+                    #   TUD-Stadtmitte
+                    
+        # seqs_str = '''KITTI-13 PETS09-S2L1 ETH-Bahnhof'''
         data_root = os.path.join(opt.data_dir, 'MOT15/images/train')
     if opt.val_mot20:
         seqs_str = '''MOT20-01

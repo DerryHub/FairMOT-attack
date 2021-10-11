@@ -23,5 +23,5 @@ def gen_caltech_path(root_path):
 
 
 if __name__ == '__main__':
-    root = '/data/yfzhang/MOT/JDE'
+    root = '/home/chenqi/Data/MOT/JDE'
     gen_caltech_path(root)
