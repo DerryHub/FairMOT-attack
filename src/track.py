@@ -818,7 +818,7 @@ if __name__ == '__main__':
                     #   ETH-Pedcross2
                     #   TUD-Stadtmitte
                     
-        # seqs_str = '''KITTI-13 PETS09-S2L1 ETH-Bahnhof'''
+        seqs_str = '''ETH-Bahnhof'''
         data_root = os.path.join(opt.data_dir, 'MOT15/images/train')
     if opt.val_mot20:
         seqs_str = '''MOT20-01
