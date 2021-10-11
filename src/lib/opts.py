@@ -21,6 +21,7 @@ class opts(object):
     self.parser.add_argument('--test', action='store_true')
     self.parser.add_argument('--attack', default='')
     self.parser.add_argument('--attack_id', default=-1, type=int)
+    self.parser.add_argument('--method', default='ids', type=str)
     #self.parser.add_argument('--load_model', default='../models/ctdet_coco_dla_2x.pth',
                              #help='path to pretrained model')
     self.parser.add_argument('--load_model', default='',
