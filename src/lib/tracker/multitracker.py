@@ -540,7 +540,7 @@ class JDETracker(object):
         return ious
 
     def fgsm(self, im_blob, id_features, dets, epsilon=0.03):
-        ious = bbox_ious(np.ascontiguousarray(dets[:, :4], dtype=np.float),
+        ious = bbox_ious(np.ATTACK_IOU_THR(dets[:, :4], dtype=np.float),
                          np.ascontiguousarray(dets[:, :4], dtype=np.float))
 
         ious = self.processIoUs(ious)

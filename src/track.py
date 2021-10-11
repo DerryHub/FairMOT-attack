@@ -51,7 +51,7 @@ class MultipleEval:
         for line in lines:
             frame, id = map(int, line.strip('\n').split(',')[:2])
             bbox = list(map(float, line.strip('\n').split(',')[2:-4]))
-            # print( frame,id,bbox)
+
             frame2id.setdefault(frame, {})
             id2frame.setdefault(id, {})
             if id in frame2id[frame] or frame in id2frame[id]:
@@ -69,62 +69,22 @@ class MultipleEval:
 
         for frame_id,frame_info in origin_frame2id.items():
                 origin_bbox_info = [ [id,bbox] for id,bbox  in frame_info.items()]
-                origin_bbox = [info[1] for info in origin_bbox_info]
+                origin_bbox =np.array([info[1] for info in origin_bbox_info])
                 origin_id = [info[0] for info in origin_bbox_info]
                 attack_bbox_info = [ [id,bbox] for id,bbox  in attack_frame2id[frame_id].items()    ]
-                attack_bbox = [info[1] for info in attack_bbox_info]
+                attack_bbox = np.array([info[1] for info in attack_bbox_info])
                 attack_id = [info[0] for info in attack_bbox_info]
-                iou = IoU(origin_bbox, attack_bbox)
+                origin_bbox[:,2:] = origin_bbox[:,2:] + origin_bbox[:,:2]
+                attack_bbox[:,2:] = attack_bbox[:,2:] + attack_bbox[:,:2]
+                iou = bbox_ious(origin_bbox, attack_bbox)
                 origin_inds,attack_inds = linear_sum_assignment(1-iou)
 
                 for origin_ind,attack_ind in zip(origin_inds,attack_inds):
-                    if origin_id[origin_ind] in valid_id2frame and iou[origin_ind,attack_ind] >     0.5:
-
+                    if origin_id[origin_ind] in valid_id2frame and iou[origin_ind,attack_ind] > 0.5:
                         tracks_pair_dic[origin_id[origin_ind]][frame_id] = attack_id[attack_ind]
                     else:
                         continue
         return tracks_pair_dic
-
-    @staticmethod        
-    def IoU(bbox, comp_bbox):
-        '''
-        :param bbox: (n, 4)
-        :param comp_bbox: (m, 4)
-        :return: (n, m)
-        '''
-        bbox = np.array(bbox)
-        comp_bbox = np.array(comp_bbox)
-        bbox[:,2:] = bbox[:,:2] + bbox[:,2:] -1
-        comp_bbox[:,2:] = comp_bbox[:,:2] + comp_bbox[:,2:] -1
-        
-    
-        lt = np.maximum(bbox[:, None, :2], comp_bbox[:, :2])  # left_top (x, y)
-        rb = np.minimum(bbox[:, None, 2:], comp_bbox[:, 2:])  # right_bottom (x, y)
-        wh = np.maximum(rb - lt + 1, 0)                # inter_area (w, h)
-        inter_areas = wh[:, :, 0] * wh[:, :, 1]        # shape: (n, m)
-        box_areas = (bbox[:, 2] - bbox[:, 0] + 1) * (bbox[:, 3] - bbox[:, 1] + 1)
-        comp_box_areas = (comp_bbox[:, 2] - comp_bbox[:, 0] + 1) * (comp_bbox[:, 3] - comp_bbox    [:, 1] + 1)
-        IoU = inter_areas / (box_areas[:, None] + comp_box_areas - inter_areas)
-    
-        return IoU
-
-    @staticmethod
-    def cal_iou(bbox, comp_bbox):
-        bbox = np.array(bbox)
-        comp_bbox = np.array(comp_bbox)
-        bbox[2:] = bbox[:2] + bbox[2:] - 1
-        comp_bbox[:,2:] = comp_bbox[:,:2] + comp_bbox[:,2:] - 1
-        s0 = (bbox[ 2] - bbox[ 0] + 1) * (bbox[ 3] - bbox[ 1] + 1)
-        s1 = (comp_bbox[:, 2] - comp_bbox[:, 0] + 1) * (comp_bbox[:, 3] - comp_bbox[:, 1] + 1)
-        x_min = np.maximum(bbox[0], comp_bbox[:, 0])
-        y_min = np.maximum(bbox[1], comp_bbox[:, 1])
-        x_max = np.minimum(bbox[2], comp_bbox[:, 2])
-        y_max = np.minimum(bbox[3], comp_bbox[:, 3])
-        w = np.maximum(0, x_max - x_min + 1)
-        h = np.maximum(0, y_max - y_min + 1)
-        area = w * h
-        iou = area / (s0 + s1 - area)
-        return iou
 
 
     def get_valid_ids(self, frame2id, id2frame):
@@ -151,43 +111,22 @@ class MultipleEval:
 
     def eval_frame(self, frame2id, frame_id, persion_id):
         bbox = frame2id[frame_id][persion_id]
-        comp_bbox = [bbox for id, bbox in frame2id[frame_id].items() if id != persion_id]
+        bbox = np.array([bbox])
+        bbox[:,2:] = bbox[:,2:] + bbox[:,:2]
+
+        
+        comp_bbox = np.array([bbox for id, bbox in frame2id[frame_id].items() if id != persion_id])
         if len(comp_bbox) == 0:
             return False
 
-        return self.bbox_intersect(bbox, comp_bbox)
-
-    def bbox_intersect(self, bbox, comp_bbox):
-        iou = self.cal_iou(bbox, comp_bbox)
-
-        if any(i >= self.iou_thr for i in iou):
+        comp_bbox[:,2:] = comp_bbox[:,2:] + comp_bbox[:,:2]
+        
+        ious = bbox_ious(bbox,comp_bbox)
+        if (ious > self.iou_thr).any():
             return True
-        else:
-            return False
+        return False
 
-    def get_pari_id(self, bbox, comp_bbox):
-        iou = self.cal_iou(bbox, comp_bbox)
-        index = np.argmax(iou)
-        if iou[index] < 0.5:
-            return -1
-        else:
-            return index
 
-    def get_predict_trackId(self, valid_id2frame, attack_frame2id):
-        valid_id2preid = {}
-        for id, track_info in valid_id2frame.items():
-            pre_frame2id = {}
-            for frame, bbox in track_info['frame2bbox'].items():
-                comp_bbox_info = [[id, bbox] for id, bbox in attack_frame2id[frame].items()]
-                comp_bbox = [info[1] for info in comp_bbox_info]
-                comp_id = [info[0] for info in comp_bbox_info]
-                id_index = self.get_pari_id(bbox, comp_bbox)
-                pre_frame2id[frame] = comp_id[id_index] if id_index != -1 else -1
-            valid_id2frame[id]['pre_frame2id'] = pre_frame2id
-            valid_id2preid[id] = {}
-            valid_id2preid[id]['pre_frame2id'] = pre_frame2id
-
-        return valid_id2frame, valid_id2preid
 
     def __call__(self, origin_path, attack_path):
         origin_frame2id, origin_id2frame = self.read_result(origin_path)
@@ -195,12 +134,13 @@ class MultipleEval:
 
         valid_id2frame = self.get_valid_ids(origin_frame2id, origin_id2frame)
         valid_id_track_pari = self.tracks_pari(origin_frame2id, attack_frame2id, valid_id2frame)
+        # import pdb;pdb.set_trace()
         # valid_id2frame, valid_id2preid = self.get_predict_trackId(valid_id2frame, attack_frame2id)
         success_attack = 0
         success_attack_id = set([])
         all_attack_id = set(valid_id_track_pari.keys())
         for id, track_info in valid_id_track_pari.items():
-            track_id = [pre_track_id for frame_id, pre_track_id in track_info['pre_frame2id'].items()]
+            track_id = [pre_track_id for frame_id, pre_track_id in track_info.items()]
             track_id_set = set(track_id)
             if -1 in track_id:
                 track_id.remove(-1)
@@ -359,10 +299,12 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
     sg_track_ids = {}
     sg_attack_frames = {}
     attack_frames = 0
-
+    
     if save_dir:
         mkdir_if_missing(save_dir)
+    
     tracker = JDETracker(opt, frame_rate=frame_rate)
+    '''
     timer = Timer()
     results = []
     results_att = []
@@ -591,7 +533,7 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
             write_results(result_filename.replace('.txt', f'_attack_{key}.txt'), results_att_sg[key], data_type)
     elif opt.attack:
         write_results(result_filename.replace('.txt', '_attack.txt'), results_att, data_type)
-
+    '''
     if opt.attack == 'single' and opt.attack_id == -1:
         print('@' * 50 + ' single attack accuracy ' + '@' * 50)
         print(f'All attacked ids is {need_attack_ids}')
