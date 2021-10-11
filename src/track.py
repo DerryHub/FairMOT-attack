@@ -542,7 +542,8 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
                     online_tlwhs_att = []
                     online_ids_att = []
                     for t in sg_track_outputs[key]['output_stracks_att']:
-                        tlwh = t.tlwh
+                        # tlwh = t.tlwh
+                        tlwh = t.tlbr_to_tlwh(t.curr_tlbr)
                         tid = t.track_id
                         vertical = tlwh[2] / tlwh[3] > 1.6
                         if tlwh[2] * tlwh[3] > opt.min_box_area and not vertical:
@@ -559,7 +560,8 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
                 online_tlwhs_att = []
                 online_ids_att = []
                 for t in output_stracks_att:
-                    tlwh = t.tlwh
+                    # tlwh = t.tlwh
+                    tlwh = t.tlbr_to_tlwh(t.curr_tlbr)
                     tid = t.track_id
                     vertical = tlwh[2] / tlwh[3] > 1.6
                     if tlwh[2] * tlwh[3] > opt.min_box_area and not vertical:
@@ -572,7 +574,8 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
         online_tlwhs = []
         online_ids = []
         for t in online_targets_ori:
-            tlwh = t.tlwh
+            # tlwh = t.tlwh
+            tlwh = t.tlbr_to_tlwh(t.curr_tlbr)
             tid = t.track_id
             vertical = tlwh[2] / tlwh[3] > 1.6
             if tlwh[2] * tlwh[3] > opt.min_box_area and not vertical:
