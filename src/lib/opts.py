@@ -19,7 +19,9 @@ class opts(object):
     self.parser.add_argument('--dataset', default='jde', help='jde')
     self.parser.add_argument('--exp_id', default='default')
     self.parser.add_argument('--test', action='store_true')
-    self.parser.add_argument('--attack', action='store_true')
+    self.parser.add_argument('--attack', default='')
+    self.parser.add_argument('--attack_id', default=-1, type=int)
+    self.parser.add_argument('--method', default='ids', type=str)
     #self.parser.add_argument('--load_model', default='../models/ctdet_coco_dla_2x.pth',
                              #help='path to pretrained model')
     self.parser.add_argument('--load_model', default='',
@@ -106,11 +108,11 @@ class opts(object):
                                   ' during validation.')
     # tracking
     self.parser.add_argument('--test_mot16', default=False, help='test mot16')
-    self.parser.add_argument('--val_mot15', default=False, help='val mot15')
+    self.parser.add_argument('--val_mot15', default=True, help='val mot15')
     self.parser.add_argument('--test_mot15', default=False, help='test mot15')
     self.parser.add_argument('--val_mot16', default=False, help='val mot16 or mot15')
     self.parser.add_argument('--test_mot17', default=False, help='test mot17')
-    self.parser.add_argument('--val_mot17', default=True, help='val mot17')
+    self.parser.add_argument('--val_mot17', default=False, help='val mot17')
     self.parser.add_argument('--val_mot20', default=False, help='val mot20')
     self.parser.add_argument('--test_mot20', default=False, help='test mot20')
     self.parser.add_argument('--conf_thres', type=float, default=0.6, help='confidence thresh for tracking')
@@ -126,7 +128,8 @@ class opts(object):
     self.parser.add_argument('--data_cfg', type=str,
                              default='../src/lib/cfg/data.json',
                              help='load data from cfg')
-    self.parser.add_argument('--data_dir', type=str, default='/home/derry/Data/MOT')
+    self.parser.add_argument('--data_dir', type=str, default='/home/chenqi/Data/MOT')
+    self.parser.add_argument('--output_dir', type=str, default='/home/chenqi/Disk/data/MOT')
 
     # loss
     self.parser.add_argument('--mse_loss', action='store_true',

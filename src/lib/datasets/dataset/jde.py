@@ -27,6 +27,7 @@ class LoadImages:  # for inference
             self.files = list(filter(lambda x: os.path.splitext(x)[1].lower() in image_format, self.files))
         elif os.path.isfile(path):
             self.files = [path]
+        # import pdb;pdb.set_trace()
 
         self.nF = len(self.files)  # number of image files
         self.width = img_size[0]

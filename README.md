@@ -101,7 +101,7 @@ sh experiments/all_dla34.sh
 * The default settings run tracking on the validation dataset from 2DMOT15. You can run:
 ```
 cd src
-python track.py mot --load_model ../models/all_dla34.pth --conf_thres 0.6
+python track.py mot --load_model ~/Disk/models/all_dla34.pth --conf_thres 0.6
 ```
 to see the tracking results. You can also set save_images=True in src/track.py to save the visualization results of each frame. 
 
@@ -166,3 +166,4 @@ provided by the bot. You will only need to do this once across all repos using o
 This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/).
 For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or
 contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
+
