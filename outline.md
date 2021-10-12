@@ -126,7 +126,15 @@
 # Related Work
 
 * MOT
+  * MOT是做什么的
+  * 简单介绍目前MOT方法
+    * 基于Tracking-by-detection的MOT：SORT、DeepSORT
+    * 基于检测和跟踪联合的MOT：JDE、FairMOT、CenterTrack、ChainedTracker等
+  * 具体介绍基于Tracking-by-detection的MOT
+  * 具体介绍基于检测和跟踪联合的MOT
 * AE
+  * 简述AE的历史和意义
+  * 介绍基于梯度下降的AE算法，FGSM、IFGSM等等
 
 # Method
 
