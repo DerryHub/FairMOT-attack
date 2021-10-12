@@ -73,7 +73,7 @@
 
 * 介绍MOT
   * 简单说明MOT重要性及其应用场景
-  * 介绍MOT数据集：MOT challenge、PathTrack等
+  * 介绍MOT数据集：MOT challenge、PathTrack等（x）
   * 简单介绍目前MOT方法
     * 基于Tracking-by-detection的MOT：SORT、DeepSORT
     * 基于检测和跟踪联合的MOT：JDE、FairMOT、CenterTrack、ChainedTracker等
@@ -93,6 +93,34 @@
   * 我们找到了MOT视频中最脆弱的区域，在该区域只需要极小的扰动便可以对某一个目标的轨迹产生影响
   * 提出了一种针对基于检测和跟踪联合的MOT及其后处理的高效的和新奇的攻击方法。
   * 实验证实了我们攻击手段的有效性，以及MOT和后处理的弱点
+
+-----------------------------------------------------*-----------------------------------------------------------
+
+* 基于深度学习CNN的Mot 模型逐渐成熟，在很多应用上取得excellent perform。
+  * what is Mot
+    * how it work：。。。
+    * what is its goal：correctly tracking multiple object 
+      * find and locate object on each frame
+      * correctly link the object to existing tracks
+  * what is used for
+  * popular algorithm
+* 然而自对抗样本被学习以来，发现很多sota 模型容易被图形上轻微的扰动影响（巨大），那么对于这些成熟的Mot模型框架是否也存在同样的问题
+  * first，what does it mean to attack the MOT system
+    * As methion above the goal of MOT is correctly tracking multiple object 
+    * so the goal of attacking MOT is to make it uncorrectly tarcking multiple object
+      * how do
+        *  make locate uncorrctly or even worse make it unable to  find the object 
+          * previous work ...
+        * uncorrectly link the object to existing tracks
+          * previous work .....
+* the previous works are mainly focus in disturbing the object detection ，the adversarial  method of making it uncorrectly identify track still lack of explore，in our work 。。。。。。
+  * 提出方法
+* contirbution：
+  * first explict the MOT attacking task
+  * explore an novel 。。。。。
+    * efficiency 。。。
+    * mot 尚未成熟的后处理流程
+  * expriment 。。。。
 
 
 # Related Work
