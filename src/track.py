@@ -489,6 +489,16 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
                 )
                 if l2_dis is not None:
                     l2_distance.append(l2_dis)
+            elif opt.attack == 'single' and opt.method == 'det':
+                assert opt.attack_id > 0
+                online_targets_ori, output_stracks_att, adImg, noise, l2_dis, suc = tracker.update_attack_sg_det(
+                    blob,
+                    img0,
+                    name=path.replace(root_r, ''),
+                    attack_id=opt.attack_id
+                )
+                if l2_dis is not None:
+                    l2_distance.append(l2_dis)
             elif opt.attack == 'multiple' and opt.method == 'ids':
                 online_targets_ori, output_stracks_att, adImg, noise, l2_dis = tracker.update_attack_mt(
                     blob,
@@ -818,7 +828,7 @@ if __name__ == '__main__':
                     #   ETH-Pedcross2
                     #   TUD-Stadtmitte
                     
-        seqs_str = '''ETH-Bahnhof'''
+        seqs_str = '''PETS09-S2L1'''
         data_root = os.path.join(opt.data_dir, 'MOT15/images/train')
     if opt.val_mot20:
         seqs_str = '''MOT20-01

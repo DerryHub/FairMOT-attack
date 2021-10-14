@@ -1,4 +1,4 @@
-#  e3W2H
+#  3W2H
 
 ## why
 
@@ -77,6 +77,8 @@
   * 简单介绍目前MOT方法
     * 基于Tracking-by-detection的MOT：SORT、DeepSORT
     * 基于检测和跟踪联合的MOT：JDE、FairMOT、CenterTrack、ChainedTracker等
+    
+    Figure 1：上述两种MOT的概念图
   * 简单说明第二种方法更受关注
 * 简单介绍对抗样本
   * 介绍各个领域对抗样本：分类、目标检测、单目标跟踪、多目标跟踪
@@ -138,11 +140,42 @@
 
 # Method
 
+* in this section, we do ...
 
+* overview of fairmot
+
+  Figure 2：network archtecture of fairmot
+
+* problem definition
+
+  Figure 3：ID交换示意图
+
+* single attack
+
+  Algorithm 1
+
+  Figure 4：center closing
+
+* multiple attack
+
+  Algorithm 2
+
+* implementation details
 
 # Experiments
 
-
+* 实验背景
+* 评估方式
+  * 攻击成功率
+  * 攻击帧数
+  * L2距离
+* 对feature和detection的单独攻击效果
+  * Figure 5：攻击效果图
+* ID交换攻击
+  * single
+    * Table 1：每个数据集在每个模型上的攻击效果
+  * multiple
+    * Table 2：每个数据集在每个模型上的攻击效果
 
 # Discussion
 
