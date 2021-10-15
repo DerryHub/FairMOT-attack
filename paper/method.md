@@ -11,8 +11,11 @@
   * 定义任务
     * single-target attack
     * multiple-targets attack
-* single-target attack
-* multiple-targets attack
+* feature attack
+  * 九宫格
+  * push-pull
+* detection attack
+* Generating Adversarial Videos
 * implementation details
 
 # method
@@ -41,6 +44,28 @@ Denote the adversarial video $\hat V=\{I_1,\cdots,I_{t-1},\hat I_t,\cdots,\hat I
 
 1. Single-Target Attack. As for a tracker $T_i$​​, $T_j$​​ is another tracker adjacent with $T_i$​​ at $t$​​-th frame. The adversarial video $\hat V$​​ guides the tracker $\hat T_i=\{O_{s_i}^i,\dots,O_{t-1}^i,O_t^j,\dots,O_{t+n-1}^j,O_{t+n}^j,\dots,O_{e_j}^j\}$​​. Only $n$​​​, a minimum of 1 frame is required, frames attacked, the attack method can make $\hat T_i$​​ error​​ and maintain the status after being attacked.
 2. Multiple-Targets Attack. Similarly, the adversarial video $\hat V$​​ causes all trackers that are adjacent with others error as far as possible. In general, the method do not need all frames of the video to be attacked as same as single-target attack.
+
+## Feature Attack with Push-Pull Loss
+
+MOT models based on combination of detection and matching, in general, learn features to represent and compute the distances of objects. It is extremely critical for the model to distinguish between trackers and objects, in particular, when objects are close to each other. In FairMOT, re-ID branch is used to predict features for objects, where locations of features in output map of re-ID branch correspond to the location of object centers. Considering that the surrounding locations of heatmap may be activated while tiny disturbance is added to the image, we calculate the distance cost with nine-block-box location, as shown in **Figure2**.
+
+Based on the assumption above, tracker $T_i$ is intersectant with tracker $T_j$ at the $t$-th frame. Obviously, it is much weak for $T_i$ and $T_j$ at the $t$-th frame. Hence, we define a push-pull loss in single-target attack at the nine-block-box location as:
+$$
+L_{PushPull}^{single}=\sum_{x,y\in NBB}\sum_{k\in\{i,j\}}Dis_{feat}(smooth(feat_{t-1}^{k,(x,y)}),\hat{feat}_t^{\widetilde k,(x,y)})-Dis_{feat}(smooth(feat_{t-1}^{k,(x,y)}),\hat{feat}_t^{k,(x,y)}),\tag1
+$$
+where $NBB$ represents set of grids in nine-block-box location, $\hat {feat}$ means the output feature of adversarial image, $\widetilde k$ denotes the id which is the most intersectant with $k$, $\widetilde i=j$ and $\widetilde j=i$ in this equation, $Dis_{feat}(\cdot)$ is a function to calculate the cosine distance of features. In oder to attack a specific object, the push-pull loss should be optimized to exchange intersectant objects. In multiple-target  attack, however, it is hard for all intersectant objects to optimized the loss, because the optimization goal is difficult to satisfy all objects needing exchange. Therefore, the push-pull loss in multiple-targets attack should be something different. The push-pull in multiple-targets attack can be expressed as:
+$$
+L_{PushPull}^{multiple}=\sum_{i\in IDs}\sum_{x,y\in NBB}\sum_{k\in\{i,\widetilde i\}}[Dis_{feat}(smooth(feat_{t-1}^{k,(x,y)}),\hat{feat}_t^{\widetilde k,(x,y)})-Dis_{feat}(smooth(feat_{t-1}^{k,(x,y)}),\hat{feat}_t^{k,(x,y)})+\gamma]_+,\tag2
+$$
+where $IDs$ represents a collection of object id intersectant with another object at the $t$-th frame. For purpose of attacking all objects, we need to pay more attention to those objects difficult to attack and exchange. Hence, hard sample strategy is added to the loss and make results promote a lot, as shown in **section 4**.
+
+## Detection Attack with Pull Center
+
+However
+
+## Generating Adversarial Videos
+
+
 
 # references
 
