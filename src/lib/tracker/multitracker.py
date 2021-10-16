@@ -766,7 +766,7 @@ class JDETracker(object):
             noise += update_grad
 
             im_blob = torch.clip(im_blob_ori + noise, min=0, max=1).data
-            id_features_, outputs_, ae_id = self.forwardFeatureSg(
+            id_features_, outputs_, ae_attack_id = self.forwardFeatureSg(
                 im_blob,
                 img0,
                 dets,
@@ -782,8 +782,10 @@ class JDETracker(object):
                 id_features = id_features_
             if outputs_ is not None:
                 outputs = outputs_
-            if ae_id != attack_id and ae_id is not None:
+            if ae_attack_id != attack_id and ae_attack_id is not None:
                 break
+            # if ae_attack_id == target_id and ae_target_id == attack_id:
+            #     break
 
             if i > 80:
                 suc = False
@@ -1180,6 +1182,7 @@ class JDETracker(object):
             id_features[i] = id_features[i][remain_inds]
 
         ae_attack_id = None
+        ae_target_id = None
 
         if not match:
             for i in range(len(id_features)):
@@ -1187,7 +1190,7 @@ class JDETracker(object):
                     id_features[i] = id_features[i][[attack_ind, target_ind]]
                 else:
                     id_features[i] = id_features[i][[attack_ind]]
-            return id_features, output, ae_attack_id
+            return id_features, output, ae_attack_id, ae_target_id
 
         ae_attack_ind = det_ind[0]
         ae_target_ind = det_ind[1] if target_ind is not None else None
@@ -1224,13 +1227,19 @@ class JDETracker(object):
             det = detections[idet]
             if idet == ae_attack_ind:
                 ae_attack_id = track.track_id
-                return id_features_, output, ae_attack_id
+                return id_features_, output, ae_attack_id, ae_target_id
+            elif idet == ae_target_ind:
+                ae_target_id = track.track_id
+
+        # if ae_attack_id is not None and ae_target_id is not None:
+        #     return id_features_, output, ae_attack_id, ae_target_id
 
         ''' Step 3: Second association, with IOU'''
         for i, idet in enumerate(u_detection):
             if idet == ae_attack_ind:
                 ae_attack_ind = i
-                break
+            elif idet == ae_target_ind:
+                ae_target_ind = i
         detections = [detections[i] for i in u_detection]
         r_tracked_stracks = [strack_pool[i] for i in u_track if strack_pool[i].state == TrackState.Tracked]
         dists = matching.iou_distance(r_tracked_stracks, detections)
@@ -1241,13 +1250,19 @@ class JDETracker(object):
             det = detections[idet]
             if idet == ae_attack_ind:
                 ae_attack_id = track.track_id
-                return id_features_, output, ae_attack_id
+                return id_features_, output, ae_attack_id, ae_target_id
+            elif idet == ae_target_ind:
+                ae_target_id = track.track_id
+
+        # if ae_attack_id is not None and ae_target_id is not None:
+        #     return id_features_, output, ae_attack_id, ae_target_id
 
         '''Deal with unconfirmed tracks, usually tracks with only one beginning frame'''
         for i, idet in enumerate(u_detection):
             if idet == ae_attack_ind:
                 ae_attack_ind = i
-                break
+            elif idet == ae_target_ind:
+                ae_target_ind = i
         detections = [detections[i] for i in u_detection]
         dists = matching.iou_distance(unconfirmed, detections)
         matches, u_unconfirmed, u_detection = matching.linear_assignment(dists, thresh=0.7)
@@ -1255,9 +1270,11 @@ class JDETracker(object):
             track = unconfirmed[itracked]
             if idet == ae_attack_ind:
                 ae_attack_id = track.track_id
-                return id_features_, output, ae_attack_id
+                return id_features_, output, ae_attack_id, ae_target_id
+            elif idet == ae_target_ind:
+                ae_target_id = track.track_id
 
-        return id_features_, output, ae_attack_id
+        return id_features_, output, ae_attack_id, ae_target_id
 
     def forwardFeatureMt(self, im_blob, img0, dets_, inds_, remain_inds_, attack_ids, attack_inds, target_ids,
                          target_inds, last_info):

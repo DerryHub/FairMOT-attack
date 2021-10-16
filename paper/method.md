@@ -15,8 +15,10 @@
   * 九宫格
   * push-pull
 * detection attack
+  * center leaping
+  * restrain
 * Generating Adversarial Videos
-* implementation details
+  * 算法流程
 
 # method
 
@@ -38,7 +40,14 @@ Achieving a good balance between accuracy and speed, FairMOT gets extremely popu
 
 Denote video $V=\{I_1,\dots,I_{t-1},I_t,I_{t+1}\dots,I_N\}$​​​​ that contains $N$​ video frames. In simple terms, there are two intersectant tracking objects predicted from the tracker $f_\theta(\cdot)$​ in the video. Respectively, denote the two predicted tracking objects $T_i=\{O_{s_i}^i,\dots,O_t^i,\dots,O_{e_i}^i\}$​ and $T_j=\{O_{s_j}^j,\dots,O_t^j,\dots,O_{e_j}^j\}$​ where they are adjacent at $t$​​​​​​​​​-th frame. Similarly, we can define the bounding boxes and features of the tracking objects as $B_k=\{box_{s_k}^k,\dots,box_t^k,\dots,box_{e_k}^k\}$​ and $F_k=\{feat_{s_k}^k,\dots,feat_t^k,\dots,feat_{e_k}^k\}$​ where $k\in\{i,j\}$​​​. In general, $box\in\R^4$ and $feat\in\R^{512}$​​​ are used to represent the bounding boxes and features of tracking objects in FairMOT.
 
-Specifically, the tracker $f_\theta(\cdot)$​​ contains detection branch, re-ID branch and online association. At the $t$​​​-th video frame, we can obtain bounding box $box_t^k$​​​ and feature $feat_t^k$​​ of tracking object $O_t^k$​​​. For the next frame, we need to compute the similarity of the obejects predicted and the tracklet pool at the $t$​​​​-th frame. The similarity contains bounding boxes distances and features distances. To be specific, distances of bounding boxes are computed as $d^{ij}_{box}=Dis_{box}(K(box_t^i),box_{t+1}^j)$​​​ and $d_{feat}^{ij}=Dis_{feat}(smooth(feat_t^i),feat_{t+1}^j)$​​ where $K(\cdot)$​​ means the Kalman filter and $smooth(feat_t^i)=\alpha \cdot smooth(feat_{t-1}^i)+(1-\alpha)\cdot feat_t^i$​​​​​. Then the linear assignment problem is solved by Hungarian algorithm with the final cost matrix between tracking objects in tracklet pool and objects predicted at the next frame $C=\{\lambda d_{box}^{ij}+(1-\lambda)d_{feat}^{ij}\}$​​​.
+Specifically, the tracker $f_\theta(\cdot)$​​ contains detection branch, re-ID branch and online association. At the $t$​​​-th video frame, we can obtain bounding box $box_t^k$​​​ and feature $feat_t^k$​​ of tracking object $O_t^k$​​​. For the next frame, we need to compute the similarity of the obejects predicted and the tracklet pool at the $t$​​​​-th frame. The similarity contains bounding boxes distances and features distances. To be specific, distances of objects are computed as follows:
+$$
+\begin{aligned}
+d^{ij}_{obj}&=d^{ij}_{box}+d_{feat}^{ij}\\
+&=Dis_{box}(K(box_t^i),box_{t+1}^j)+Dis_{feat}(smooth(feat_t^i),feat_{t+1}^j)
+\end{aligned},\tag1
+$$
+where $K(\cdot)$​​ means the Kalman filter and $smooth(feat_t^i)=\alpha \cdot smooth(feat_{t-1}^i)+(1-\alpha)\cdot feat_t^i$​​​​​. Then the linear assignment problem is solved by Hungarian algorithm with the final cost matrix between tracking objects in tracklet pool and objects predicted at the next frame $C=\{\lambda d_{box}^{ij}+(1-\lambda)d_{feat}^{ij}\}$​​​.
 
 Denote the adversarial video $\hat V=\{I_1,\cdots,I_{t-1},\hat I_t,\cdots,\hat I_{t+n-1},I_{t+n},\cdots,I_N\}$​ where $I$​ means the original frame and $\hat I$​​​ means frame with tiny disturbance. Here are the definitions of single-target attack and multiple-targets attack in MOT below:
 
@@ -51,21 +60,50 @@ MOT models based on combination of detection and matching, in general, learn fea
 
 Based on the assumption above, tracker $T_i$ is intersectant with tracker $T_j$ at the $t$-th frame. Obviously, it is much weak for $T_i$ and $T_j$ at the $t$-th frame. Hence, we define a push-pull loss in single-target attack at the nine-block-box location as:
 $$
-L_{PushPull}^{single}=\sum_{x,y\in NBB}\sum_{k\in\{i,j\}}Dis_{feat}(smooth(feat_{t-1}^{k,(x,y)}),\hat{feat}_t^{\widetilde k,(x,y)})-Dis_{feat}(smooth(feat_{t-1}^{k,(x,y)}),\hat{feat}_t^{k,(x,y)}),\tag1
+L_{PushPull}^{single}=\sum_{x,y\in NBB}\sum_{k\in\{i,j\}}Dis_{feat}(smooth(feat_{t-1}^{k,(x,y)}),\hat{feat}_t^{\widetilde k,(x,y)})-Dis_{feat}(smooth(feat_{t-1}^{k,(x,y)}),\hat{feat}_t^{k,(x,y)}),\tag2
 $$
 where $NBB$ represents set of grids in nine-block-box location, $\hat {feat}$ means the output feature of adversarial image, $\widetilde k$ denotes the id which is the most intersectant with $k$, $\widetilde i=j$ and $\widetilde j=i$ in this equation, $Dis_{feat}(\cdot)$ is a function to calculate the cosine distance of features. In oder to attack a specific object, the push-pull loss should be optimized to exchange intersectant objects. In multiple-target  attack, however, it is hard for all intersectant objects to optimized the loss, because the optimization goal is difficult to satisfy all objects needing exchange. Therefore, the push-pull loss in multiple-targets attack should be something different. The push-pull in multiple-targets attack can be expressed as:
 $$
-L_{PushPull}^{multiple}=\sum_{i\in IDs}\sum_{x,y\in NBB}\sum_{k\in\{i,\widetilde i\}}[Dis_{feat}(smooth(feat_{t-1}^{k,(x,y)}),\hat{feat}_t^{\widetilde k,(x,y)})-Dis_{feat}(smooth(feat_{t-1}^{k,(x,y)}),\hat{feat}_t^{k,(x,y)})+\gamma]_+,\tag2
+L_{PushPull}^{multiple}=\sum_{x,y\in NBB}\sum_{i\in IDs}\sum_{k\in\{i,\widetilde i\}}[Dis_{feat}(smooth(feat_{t-1}^{k,(x,y)}),\hat{feat}_t^{\widetilde k,(x,y)})-Dis_{feat}(smooth(feat_{t-1}^{k,(x,y)}),\hat{feat}_t^{k,(x,y)})+\gamma]_+,\tag3
 $$
-where $IDs$ represents a collection of object id intersectant with another object at the $t$-th frame. For purpose of attacking all objects, we need to pay more attention to those objects difficult to attack and exchange. Hence, hard sample strategy is added to the loss and make results promote a lot, as shown in **section 4**.
+where $IDs$ represents a collection of object id intersectant with another object at the $t$-th frame. For purpose of attacking all objects, we need to pay more attention to those objects difficult to attack and exchange. Hence, hard sample strategy is added to the loss and make results promote a lot, as shown in **Section 4**.
 
-## Detection Attack with Pull Center
+## Detection Attack with Center Leaping
 
-However
+Objects attacked in feature, generally speaking, make useful confusing the tracker in cases of intersection. However, in most cases, as shown in **Figure3**, it is hard to attack successfully only with feature attack because the distances of bounding boxes are too large to exchange their ids. Due to the problem mentioned above, we need to reduce the distances of objects. The bounding boxes, nevertheless, are computed with discrete locations of heat points of heatmap. Therefore, we can not optimize a bounding-box loss to make objects close to each other simply.
+
+Based on the reason above, a noval and simple method, named center leaping, is proposed to solve the problem. The optimization function can be expressed as follows:
+$$
+\min_{\hat {box}}\sum_{k\in\{i,j\}}Dis_{cet}(CET(K(box_{t-1}^k)),CET(\hat{box}_t^\widetilde k)),\tag4
+$$
+where $\hat {box}$ means the output bounding box of adversarial image, $CET(\cdot)$ represents the location of center of box and $Dis_{cet}(\cdot)$ denotes the Euclidean distances of centers. In order to exchange the ids between the $k$-th object and the $\widetilde k$-th object, as shown in **Figure4**, the center of the $k$-th object at the $t$-th frame should close to the center of the $\widetilde k$-th object with the Kalman filter at the $(t-1)$-th frame. In the optimization process of feature attack, the center of the $k$-th object at the $t$-th frame will leap to the next grid in the direction of the center of the $\widetilde k$-th object at certain numbers of iterations. Then, a focal loss, with the same as the training process of FairMOT, will be computed with the new centers as follows:
+$$
+L^{FocalLoss}_{cet}=\sum_{x,y\in CTs}-(1-HM_{x,y})^\gamma\log(HM_{x,y}),\tag5
+$$
+where $CTs$ denotes a collection of centers, which is likely to leap to new locations, at the current frame and $HM_{x,y}$ means the value of heatmap at location $(x,y)$. With addition of the center leaping, attack accuracy seems promote a lot, as shown in **Section4**.
+
+On the side, image with tiny disturbance may cause the tracker detect objects out of original position or something lack. Hence, we need to restrain the offsets of objects with square error:
+$$
+L_{size}=\sum_{x,y\in CTs}\parallel size_t^{x,y}-\hat {size}_t^{x,y}\parallel_2^2,\tag6
+$$
+
+$$
+L_{offset}=\sum_{x,y\in CTs}\parallel offset_t^{x,y}-\hat {offset}_t^{x,y}\parallel_2^2,\tag7
+$$
+
+where $size$ and $offset$ represent the outputs of  size head and offset head in FairMOT.
 
 ## Generating Adversarial Videos
 
-
+For concealment of disturbance, we should control the $L_2$ distance between adversarial image $\hat I$ and original image $I$ with $L_2$ loss as follows:
+$$
+L_{noise}=\parallel \hat I-I\parallel_2^2.\tag8
+$$
+With addition of all of the cost functions simply above, we can get a optimization goal:
+$$
+\min_{\hat V}Loss=\min_{\hat V}L_{PushPull}+L_{cet}+L_{size}+L_{offset}+L_{noise}.\tag9
+$$
+The overview of generating adversarial videos algorithm is shown in **Algorithm1**. Firstly, tack the single-target attack as an example, we find the specific id in the original tracked video and start attacking the object when it has been going on for $THR_{frame}$ frames. Then, we check the track of the object is correct or not. If correct, the object of current frame will be attacked with optimizing the loss above iteratively util the track make a mistake or the number of iterations reach $THR_{iter}$. In particular, center of the object will leap to the next grid at certain numbers of iterations as mentioned in **Section3**. Next, the noise generated will be added to the current frame and deal with the incoming frame. Besides, if the object goes wrong continuously for twenty frames without attack, we consider the object has been attacked successfully. Due to the smooth features, the proportion of information of its original feature can be computed as $\alpha^{20}$ ($\alpha=0.9$ in FairMOT) which is the equivalent of about 12%. Hence, it is almost impossible to exchange back to the original object without disturbance.
 
 # references
 
