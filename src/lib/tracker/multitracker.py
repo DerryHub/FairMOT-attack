@@ -748,8 +748,8 @@ class JDETracker(object):
             loss += ((1 - outputs['hm'].view(-1).sigmoid()[hm_index]) ** 2 *
                      torch.log(outputs['hm'].view(-1).sigmoid()[hm_index])).mean()
 
-            loss -= mse(outputs['wh'].view(-1)[hm_index], wh_ori.view(-1)[hm_index_ori])
-            loss -= mse(outputs['reg'].view(-1)[hm_index], reg_ori.view(-1)[hm_index_ori])
+            # loss -= mse(outputs['wh'].view(-1)[hm_index], wh_ori.view(-1)[hm_index_ori])
+            # loss -= mse(outputs['reg'].view(-1)[hm_index], reg_ori.view(-1)[hm_index_ori])
 
             loss.backward()
 
@@ -766,7 +766,7 @@ class JDETracker(object):
             noise += update_grad
 
             im_blob = torch.clip(im_blob_ori + noise, min=0, max=1).data
-            id_features_, outputs_, ae_attack_id = self.forwardFeatureSg(
+            id_features_, outputs_, ae_attack_id, ae_target_id = self.forwardFeatureSg(
                 im_blob,
                 img0,
                 dets,
