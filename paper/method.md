@@ -1,0 +1,124 @@
+# outline
+
+* 确定攻击代表性模型
+* overview of FairMOT
+  * detection branch
+  * re-ID branch
+  * online association
+* problem definition
+  * 定义数据
+  * 定义模型及输出
+  * 定义任务
+    * single-target attack
+    * multiple-targets attack
+* feature attack
+  * 九宫格
+  * push-pull
+* detection attack
+  * center leaping
+  * restrain
+* Generating Adversarial Videos
+  * 算法流程
+
+# method
+
+**ID-Exchanged Attack**
+
+In this section, we propose a noval method named ID-exchanged attack for multiple object tracking based on combination of detection and matching. Our method aims to make the id of the target object different from the original by exchanging the ids between the target object and its adjacent object.  Representatively, we choose FairMOT[1] as our target model being attacked due to its high popularity among in real-time MOT system. Besides, it is easy for our method to be implemented in other MOT model based on combination of detection and matching[2,3,4].
+
+## Overview of FairMOT
+
+Achieving a good balance between accuracy and speed, FairMOT gets extremely popular in academia and industry. The fairness between the tasks of object detection and matching allows FairMOT to obtain high performance on MOT challenge datasets[5,6,7,8]. As shown in **Figure 1**, the network architecture of FairMOT consists of two homogeneous branches to predict the location of object and re-ID features. Besides the branchs, online association is also the important component of FairMOT.
+
+**Detection Branch.** The anchor-free detection branch of FairMOT is built on CenterNet, which predicts three heads: heatmap head, box offset head and size head. Heatmap head learns the locations of the object centers. Specifically, the dimension of the heatmap is $1\times H\times W$. We define bounding box of the $i$-th object in $t$-th frame as $box^t_i=(x_1^{t,i},y_1^{t,i},x_2^{t,i},y_2^{t,i})$. And then the object center can be respectively computed $(c_x^{t,i},c_y^{t,i})$ as $c_x^{t,i}=\frac{x_1^{t,i}+x_2^{t,i}}{2}$ and $c_y^{t,i}=\frac{y_1^{t,i}+y_2^{t,i}}{2}$. The location of the bounding box on the heatmap can be obtained by dividing the stride (4 in FairMOT) $(\lfloor\frac{c_x^{t,i}}{4}\rfloor,\lfloor\frac{c_y^{t,i}}{4}\rfloor)$. The value of heatmap means the confidence score that there is an object center at the corresponding location. Also, the goal of box offset head is to localize objects more precisely. Denote the offset and size heads in $t$-th frame as $offset^t\in\R^{2\times H\times W}$ and $size^t\in\R^{2\times H\times W}$. Similarly, the GT offset head is computed as $offset_i^t=(\frac{c_x^{t,i}}{4}-\lfloor\frac{c_x^{t,i}}{4}\rfloor,\frac{c_y^{t,i}}{4}-\lfloor\frac{c_y^{t,i}}{4}\rfloor)$ and the GT size head is computed as $size_i^t=(x_2^{t,i}-x_1^{t,i},y_2^{t,i}-y_1^{t,i})$. 
+
+**Re-ID Branch.** Re-ID branch learn the difference of objects. Denote the feature map as $feature^t\in\R^{512\times H\times W}$. The re-ID feature $feature^t_{x,y}\in\R^{512}$ means the feature vector, whose $L_2$ norm equals to 1, of an object centered at $(x,y)$. Then cosine similarities of the features are computed in matching module to evaluate the similarity of objects.
+
+**Oline Association.** FairMOT follows the standard online tracking algorithm[2] to association boxes. In the first frame, tracklets from predicted bounding boxes and features are initialized. Then in each next frame, detected boxes are linked to the existing tracklets according to their cosine distance and their box distance.
+
+## Problem Definition
+
+Denote video $V=\{I_1,\dots,I_{t-1},I_t,I_{t+1}\dots,I_N\}$​​​​ that contains $N$​ video frames. In simple terms, there are two intersectant tracking objects predicted from the tracker $f_\theta(\cdot)$​ in the video. Respectively, denote the two predicted tracking objects $T_i=\{O_{s_i}^i,\dots,O_t^i,\dots,O_{e_i}^i\}$​ and $T_j=\{O_{s_j}^j,\dots,O_t^j,\dots,O_{e_j}^j\}$​ where they are adjacent at $t$​​​​​​​​​-th frame. Similarly, we can define the bounding boxes and features of the tracking objects as $B_k=\{box_{s_k}^k,\dots,box_t^k,\dots,box_{e_k}^k\}$​ and $F_k=\{feat_{s_k}^k,\dots,feat_t^k,\dots,feat_{e_k}^k\}$​ where $k\in\{i,j\}$​​​. In general, $box\in\R^4$ and $feat\in\R^{512}$​​​ are used to represent the bounding boxes and features of tracking objects in FairMOT.
+
+Specifically, the tracker $f_\theta(\cdot)$​​ contains detection branch, re-ID branch and online association. At the $t$​​​-th video frame, we can obtain bounding box $box_t^k$​​​ and feature $feat_t^k$​​ of tracking object $O_t^k$​​​. For the next frame, we need to compute the similarity of the obejects predicted and the tracklet pool at the $t$​​​​-th frame. The similarity contains bounding boxes distances and features distances. To be specific, distances of objects are computed as follows:
+$$
+\begin{aligned}
+d^{ij}_{obj}&=d^{ij}_{box}+d_{feat}^{ij}\\
+&=Dis_{box}(K(box_t^i),box_{t+1}^j)+Dis_{feat}(smooth(feat_t^i),feat_{t+1}^j)
+\end{aligned},\tag1
+$$
+where $K(\cdot)$​​ means the Kalman filter and $smooth(feat_t^i)=\alpha \cdot smooth(feat_{t-1}^i)+(1-\alpha)\cdot feat_t^i$​​​​​. Then the linear assignment problem is solved by Hungarian algorithm with the final cost matrix between tracking objects in tracklet pool and objects predicted at the next frame $C=\{\lambda d_{box}^{ij}+(1-\lambda)d_{feat}^{ij}\}$​​​.
+
+Denote the adversarial video $\hat V=\{I_1,\cdots,I_{t-1},\hat I_t,\cdots,\hat I_{t+n-1},I_{t+n},\cdots,I_N\}$​ where $I$​ means the original frame and $\hat I$​​​ means frame with tiny disturbance. Here are the definitions of single-target attack and multiple-targets attack in MOT below:
+
+1. Single-Target Attack. As for a tracker $T_i$​​, $T_j$​​ is another tracker adjacent with $T_i$​​ at $t$​​-th frame. The adversarial video $\hat V$​​ guides the tracker $\hat T_i=\{O_{s_i}^i,\dots,O_{t-1}^i,O_t^j,\dots,O_{t+n-1}^j,O_{t+n}^j,\dots,O_{e_j}^j\}$​​. Only $n$​​​, a minimum of 1 frame is required, frames attacked, the attack method can make $\hat T_i$​​ error​​ and maintain the status after being attacked.
+2. Multiple-Targets Attack. Similarly, the adversarial video $\hat V$​​ causes all trackers that are adjacent with others error as far as possible. In general, the method do not need all frames of the video to be attacked as same as single-target attack.
+
+## Feature Attack with Push-Pull Loss
+
+MOT models based on combination of detection and matching, in general, learn features to represent and compute the distances of objects. It is extremely critical for the model to distinguish between trackers and objects, in particular, when objects are close to each other. In FairMOT, re-ID branch is used to predict features for objects, where locations of features in output map of re-ID branch correspond to the location of object centers. Considering that the surrounding locations of heatmap may be activated while tiny disturbance is added to the image, we calculate the distance cost with nine-block-box location, as shown in **Figure2**.
+
+Based on the assumption above, tracker $T_i$ is intersectant with tracker $T_j$ at the $t$-th frame. Obviously, it is much weak for $T_i$ and $T_j$ at the $t$-th frame. Hence, we define a push-pull loss in single-target attack at the nine-block-box location as:
+$$
+L_{PushPull}^{single}=\sum_{x,y\in NBB}\sum_{k\in\{i,j\}}Dis_{feat}(smooth(feat_{t-1}^{k,(x,y)}),\hat{feat}_t^{\widetilde k,(x,y)})-Dis_{feat}(smooth(feat_{t-1}^{k,(x,y)}),\hat{feat}_t^{k,(x,y)}),\tag2
+$$
+where $NBB$ represents set of grids in nine-block-box location, $\hat {feat}$ means the output feature of adversarial image, $\widetilde k$ denotes the id which is the most intersectant with $k$, $\widetilde i=j$ and $\widetilde j=i$ in this equation, $Dis_{feat}(\cdot)$ is a function to calculate the cosine distance of features. In oder to attack a specific object, the push-pull loss should be optimized to exchange intersectant objects. In multiple-target  attack, however, it is hard for all intersectant objects to optimized the loss, because the optimization goal is difficult to satisfy all objects needing exchange. Therefore, the push-pull loss in multiple-targets attack should be something different. The push-pull in multiple-targets attack can be expressed as:
+$$
+L_{PushPull}^{multiple}=\sum_{x,y\in NBB}\sum_{i\in IDs}\sum_{k\in\{i,\widetilde i\}}[Dis_{feat}(smooth(feat_{t-1}^{k,(x,y)}),\hat{feat}_t^{\widetilde k,(x,y)})-Dis_{feat}(smooth(feat_{t-1}^{k,(x,y)}),\hat{feat}_t^{k,(x,y)})+\gamma]_+,\tag3
+$$
+where $IDs$ represents a collection of object id intersectant with another object at the $t$-th frame. For purpose of attacking all objects, we need to pay more attention to those objects difficult to attack and exchange. Hence, hard sample strategy is added to the loss and make results promote a lot, as shown in **Section 4**.
+
+## Detection Attack with Center Leaping
+
+Objects attacked in feature, generally speaking, make useful confusing the tracker in cases of intersection. However, in most cases, as shown in **Figure3**, it is hard to attack successfully only with feature attack because the distances of bounding boxes are too large to exchange their ids. Due to the problem mentioned above, we need to reduce the distances of objects. The bounding boxes, nevertheless, are computed with discrete locations of heat points of heatmap. Therefore, we can not optimize a bounding-box loss to make objects close to each other simply.
+
+Based on the reason above, a noval and simple method, named center leaping, is proposed to solve the problem. The optimization function can be expressed as follows:
+$$
+\min_{\hat {box}}\sum_{k\in\{i,j\}}Dis_{cet}(CET(K(box_{t-1}^k)),CET(\hat{box}_t^\widetilde k)),\tag4
+$$
+where $\hat {box}$ means the output bounding box of adversarial image, $CET(\cdot)$ represents the location of center of box and $Dis_{cet}(\cdot)$ denotes the Euclidean distances of centers. In order to exchange the ids between the $k$-th object and the $\widetilde k$-th object, as shown in **Figure4**, the center of the $k$-th object at the $t$-th frame should close to the center of the $\widetilde k$-th object with the Kalman filter at the $(t-1)$-th frame. In the optimization process of feature attack, the center of the $k$-th object at the $t$-th frame will leap to the next grid in the direction of the center of the $\widetilde k$-th object at certain numbers of iterations. Then, a focal loss, with the same as the training process of FairMOT, will be computed with the new centers as follows:
+$$
+L^{FocalLoss}_{cet}=\sum_{x,y\in CTs}-(1-HM_{x,y})^\gamma\log(HM_{x,y}),\tag5
+$$
+where $CTs$ denotes a collection of centers, which is likely to leap to new locations, at the current frame and $HM_{x,y}$ means the value of heatmap at location $(x,y)$. With addition of the center leaping, attack accuracy seems promote a lot, as shown in **Section4**.
+
+On the side, image with tiny disturbance may cause the tracker detect objects out of original position or something lack. Hence, we need to restrain the offsets of objects with square error:
+$$
+L_{size}=\sum_{x,y\in CTs}\parallel size_t^{x,y}-\hat {size}_t^{x,y}\parallel_2^2,\tag6
+$$
+
+$$
+L_{offset}=\sum_{x,y\in CTs}\parallel offset_t^{x,y}-\hat {offset}_t^{x,y}\parallel_2^2,\tag7
+$$
+
+where $size$ and $offset$ represent the outputs of  size head and offset head in FairMOT.
+
+## Generating Adversarial Videos
+
+For concealment of disturbance, we should control the $L_2$ distance between adversarial image $\hat I$ and original image $I$ with $L_2$ loss as follows:
+$$
+L_{noise}=\parallel \hat I-I\parallel_2^2.\tag8
+$$
+With addition of all of the cost functions simply above, we can get a optimization goal:
+$$
+\min_{\hat V}Loss=\min_{\hat V}L_{PushPull}+L_{cet}+L_{size}+L_{offset}+L_{noise}.\tag9
+$$
+The overview of generating adversarial videos algorithm is shown in **Algorithm1**. Firstly, tack the single-target attack as an example, we find the specific id in the original tracked video and start attacking the object when it has been going on for $THR_{frame}$ frames. Then, we check the track of the object is correct or not. If correct, the object of current frame will be attacked with optimizing the loss above iteratively util the track make a mistake or the number of iterations reach $THR_{iter}$. In particular, center of the object will leap to the next grid at certain numbers of iterations as mentioned in **Section3**. Next, the noise generated will be added to the current frame and deal with the incoming frame. Besides, if the object goes wrong continuously for twenty frames without attack, we consider the object has been attacked successfully. Due to the smooth features, the proportion of information of its original feature can be computed as $\alpha^{20}$ ($\alpha=0.9$ in FairMOT) which is the equivalent of about 12%. Hence, it is almost impossible to exchange back to the original object without disturbance.
+
+# references
+
+[1] FairMOT
+
+[2] JDE
+
+[3] CenterTrack
+
+[4] ChainedTracker
+
+[5] MOT15
+
+[6] MOT16
+
+[7] MOT17
+
+[8] MOT20
