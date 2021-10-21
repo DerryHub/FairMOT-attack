@@ -659,7 +659,7 @@ class JDETracker(object):
             attack_ind,
             target_id,
             target_ind,
-            lr=0.001,
+            lr=0.1,
             beta_1=0.9,
             beta_2=0.999
     ):
@@ -732,13 +732,13 @@ class JDETracker(object):
                 target_det_center = torch.stack([hm_index[target_ind] % W, hm_index[target_ind] // W]).float()
                 if last_target_det_center is not None:
                     attack_center_delta = attack_det_center - last_target_det_center
-                    if torch.max(torch.abs(attack_center_delta)) > 2:
+                    if torch.max(torch.abs(attack_center_delta)) > 1:
                         attack_center_delta /= torch.max(torch.abs(attack_center_delta))
                         attack_det_center = torch.round(attack_det_center - attack_center_delta).int()
                         hm_index[attack_ind] = attack_det_center[0] + attack_det_center[1] * W
                 if last_attack_det_center is not None:
                     target_center_delta = target_det_center - last_attack_det_center
-                    if torch.max(torch.abs(target_center_delta)) > 2:
+                    if torch.max(torch.abs(target_center_delta)) > 1:
                         target_center_delta /= torch.max(torch.abs(target_center_delta))
                         target_det_center = torch.round(target_det_center - target_center_delta).int()
                         hm_index[target_ind] = target_det_center[0] + target_det_center[1] * W
@@ -748,25 +748,26 @@ class JDETracker(object):
             loss += ((1 - outputs['hm'].view(-1).sigmoid()[hm_index]) ** 2 *
                      torch.log(outputs['hm'].view(-1).sigmoid()[hm_index])).mean()
 
-            # loss -= mse(outputs['wh'].view(-1)[hm_index], wh_ori.view(-1)[hm_index_ori])
-            # loss -= mse(outputs['reg'].view(-1)[hm_index], reg_ori.view(-1)[hm_index_ori])
+            # import pdb; pdb.set_trace()
+            # loss -= mse(outputs['wh'].view(2, -1)[:, hm_index], wh_ori.view(2, -1)[:, hm_index_ori])
+            # loss -= mse(outputs['reg'].view(2, -1)[:, hm_index], reg_ori.view(2, -1)[:, hm_index_ori])
 
             loss.backward()
 
             grad = im_blob.grad
+            #
+            # adam_m = beta_1 * adam_m + (1 - beta_1) * grad
+            # adam_v = beta_2 * adam_v + (1 - beta_2) * (grad ** 2)
+            #
+            # adam_m_ = adam_m / (1 - beta_1 ** i)
+            # adam_v_ = adam_v / (1 - beta_2 ** i)
+            #
+            # update_grad = lr * adam_m_ / (adam_v_.sqrt() + 1e-8)
 
-            adam_m = beta_1 * adam_m + (1 - beta_1) * grad
-            adam_v = beta_2 * adam_v + (1 - beta_2) * (grad ** 2)
-
-            adam_m_ = adam_m / (1 - beta_1 ** i)
-            adam_v_ = adam_v / (1 - beta_2 ** i)
-
-            update_grad = lr * adam_m_ / (adam_v_.sqrt() + 1e-8)
-
-            noise += update_grad
+            noise += grad * lr
 
             im_blob = torch.clip(im_blob_ori + noise, min=0, max=1).data
-            id_features_, outputs_, ae_attack_id, ae_target_id = self.forwardFeatureSg(
+            id_features_, outputs_, ae_attack_id, ae_target_id, hm_index_ = self.forwardFeatureSg(
                 im_blob,
                 img0,
                 dets,
@@ -782,6 +783,8 @@ class JDETracker(object):
                 id_features = id_features_
             if outputs_ is not None:
                 outputs = outputs_
+            # if hm_index_ is not None:
+            #     hm_index = hm_index_
             if ae_attack_id != attack_id and ae_attack_id is not None:
                 break
             # if ae_attack_id == target_id and ae_target_id == attack_id:
@@ -905,7 +908,7 @@ class JDETracker(object):
             attack_inds,
             target_ids,
             target_inds,
-            lr=0.001,
+            lr=0.1,
             beta_1=0.9,
             beta_2=0.999
     ):
@@ -1156,17 +1159,18 @@ class JDETracker(object):
         else:
             ious = bbox_ious(np.ascontiguousarray(dets_[[attack_ind, target_ind], :4], dtype=np.float),
                              np.ascontiguousarray(dets[:, :4], dtype=np.float))
-        det_ind = np.argmax(ious, axis=1)
+        # det_ind = np.argmax(ious, axis=1)
+        row_inds, col_inds = linear_sum_assignment(-ious)
 
         match = True
         if target_ind is None:
-            if ious[0, det_ind[0]] < 0.8:
+            if ious[row_inds[0], col_inds[0]] < 0.8:
                 dets = dets_
                 inds = inds_
                 remain_inds = remain_inds_
                 match = False
         else:
-            if ious[0, det_ind[0]] < 0.6 or ious[1, det_ind[1]] < 0.6:
+            if ious[row_inds[0], col_inds[0]] < 0.6 or ious[row_inds[1], col_inds[1]] < 0.6:
                 dets = dets_
                 inds = inds_
                 remain_inds = remain_inds_
@@ -1190,10 +1194,20 @@ class JDETracker(object):
                     id_features[i] = id_features[i][[attack_ind, target_ind]]
                 else:
                     id_features[i] = id_features[i][[attack_ind]]
-            return id_features, output, ae_attack_id, ae_target_id
+            return id_features, output, ae_attack_id, ae_target_id, None
 
-        ae_attack_ind = det_ind[0]
-        ae_target_ind = det_ind[1] if target_ind is not None else None
+        if row_inds[0] == 0:
+            ae_attack_ind = col_inds[0]
+            ae_target_ind = col_inds[1] if target_ind is not None else None
+        else:
+            ae_attack_ind = col_inds[1]
+            ae_target_ind = col_inds[0] if target_ind is not None else None
+        # ae_attack_ind = det_ind[0]
+        # ae_target_ind = det_ind[1] if target_ind is not None else None
+
+        hm_index = inds[0][remain_inds]
+        if target_ind is not None:
+            hm_index[[attack_ind, target_ind]] = hm_index[[ae_attack_ind, ae_target_ind]]
 
         id_features_ = [None for _ in range(len(id_features))]
         for i in range(len(id_features)):
@@ -1227,7 +1241,7 @@ class JDETracker(object):
             det = detections[idet]
             if idet == ae_attack_ind:
                 ae_attack_id = track.track_id
-                return id_features_, output, ae_attack_id, ae_target_id
+                return id_features_, output, ae_attack_id, ae_target_id, hm_index
             elif idet == ae_target_ind:
                 ae_target_id = track.track_id
 
@@ -1250,7 +1264,7 @@ class JDETracker(object):
             det = detections[idet]
             if idet == ae_attack_ind:
                 ae_attack_id = track.track_id
-                return id_features_, output, ae_attack_id, ae_target_id
+                return id_features_, output, ae_attack_id, ae_target_id, hm_index
             elif idet == ae_target_ind:
                 ae_target_id = track.track_id
 
@@ -1270,11 +1284,11 @@ class JDETracker(object):
             track = unconfirmed[itracked]
             if idet == ae_attack_ind:
                 ae_attack_id = track.track_id
-                return id_features_, output, ae_attack_id, ae_target_id
+                return id_features_, output, ae_attack_id, ae_target_id, hm_index
             elif idet == ae_target_ind:
                 ae_target_id = track.track_id
 
-        return id_features_, output, ae_attack_id, ae_target_id
+        return id_features_, output, ae_attack_id, ae_target_id, hm_index
 
     def forwardFeatureMt(self, im_blob, img0, dets_, inds_, remain_inds_, attack_ids, attack_inds, target_ids,
                          target_inds, last_info):
