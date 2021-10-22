@@ -301,6 +301,8 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
     results = []
     results_att = []
     results_att_sg = {}
+    l2_distance = []
+    l2_distance_sg = {}
     frame_id = 0
     root_r = opt.data_dir
     root_r += '/' if root_r[-1] != '/' else ''
@@ -308,8 +310,7 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
     root += '/' if root[-1] != '/' else ''
     imgRoot = os.path.join(root, 'image')
     noiseRoot = os.path.join(root, 'noise')
-    l2_distance = []
-    l2_distance_sg = {}
+
     
     for path, img, img0 in dataloader:
         if frame_id % 20 == 0:
@@ -322,7 +323,7 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
         blob = torch.from_numpy(img).cuda().unsqueeze(0)
 
         if opt.attack:
-            if opt.attack == 'single' and opt.attack_id == -1 and opt.method == 'ids':
+            if opt.attack == 'single' and opt.attack_id == -1 and opt.method in ['ids', 'det']:
                 online_targets_ori = tracker.update(blob, img0, name=path.replace(root_r, ''), track_id=track_id)
                 dets = []
                 ids = []
@@ -361,13 +362,22 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
                             'origin': {'track_id': track_id['track_id']},
                             'attack': {'track_id': track_id['track_id']}
                         }
-                    _, output_stracks_att, adImg, noise, l2_dis, suc = trackers_dic[attack_id].update_attack_sg(
-                        blob,
-                        img0,
-                        name=path.replace(root_r, ''),
-                        attack_id=attack_id,
-                        track_id=sg_track_ids[attack_id]
-                    )
+                    if opt.method == 'ids':
+                        _, output_stracks_att, adImg, noise, l2_dis, suc = trackers_dic[attack_id].update_attack_sg(
+                            blob,
+                            img0,
+                            name=path.replace(root_r, ''),
+                            attack_id=attack_id,
+                            track_id=sg_track_ids[attack_id]
+                        )
+                    else:
+                        _, output_stracks_att, adImg, noise, l2_dis, suc = trackers_dic[attack_id].update_attack_sg_det(
+                            blob,
+                            img0,
+                            name=path.replace(root_r, ''),
+                            attack_id=attack_id,
+                            track_id=sg_track_ids[attack_id]
+                        )
                     sg_track_outputs[attack_id] = {}
                     sg_track_outputs[attack_id]['output_stracks_att'] = output_stracks_att
                     sg_track_outputs[attack_id]['adImg'] = adImg
@@ -831,7 +841,7 @@ if __name__ == '__main__':
                       ETH-Pedcross2
                       TUD-Stadtmitte'''
                     
-        seqs_str = '''ETH-Bahnhof'''
+        seqs_str = '''PETS09-S2L1'''
         data_root = os.path.join(opt.data_dir, 'MOT15/images/train')
     if opt.val_mot20:
         seqs_str = '''MOT20-01
