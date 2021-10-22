@@ -631,7 +631,8 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
         print(f'All successfully attacked ids is {suc_attacked_ids}')
         print(f'All unsuccessfully attacked ids is {need_attack_ids - suc_attacked_ids}')
         print(
-            f'The accuracy is {round(100 * len(suc_attacked_ids) / len(need_attack_ids), 2) if len(need_attack_ids) else 0}%')
+            f'The accuracy is {round(100 * len(suc_attacked_ids) / len(need_attack_ids), 2) if len(need_attack_ids) else 0}% | '
+            f'{len(suc_attacked_ids)}/{len(need_attack_ids)}')
         print(
             f'The attacked frames: {sg_attack_frames}\tmin: {min(sg_attack_frames.values()) if len(need_attack_ids) else None}\t'
             f'max: {max(sg_attack_frames.values()) if len(need_attack_ids) else None}\tmean: {sum(sg_attack_frames.values()) / len(sg_attack_frames) if len(need_attack_ids) else None}')
@@ -804,6 +805,7 @@ if __name__ == '__main__':
                       MOT17-08-SDP
                       MOT17-12-SDP
                       MOT17-14-SDP'''
+        seqs_str = '''MOT17-03-SDP'''
         data_root = os.path.join(opt.data_dir, 'MOT17/images/test')
     if opt.val_mot17:
         # seqs_str = '''MOT17-02-SDP
@@ -813,23 +815,23 @@ if __name__ == '__main__':
         #               MOT17-10-SDP
         #               MOT17-11-SDP
         #               MOT17-13-SDP'''
-        seqs_str = '''MOT17-11-SDP'''
+        seqs_str = '''MOT17-05-SDP'''
         data_root = os.path.join(opt.data_dir, 'MOT17/images/train')
     if opt.val_mot15:
-        seqs_str = '''
-                      
+        seqs_str = '''Venice-2
                       KITTI-13
-                    '''
-                    #   ETH-Sunnyday
-                    #   PETS09-S2L1
-                    #   TUD-Campus
-                    #   TUD-Stadtmitte
-                    #   ADL-Rundle-6
-                    #   ADL-Rundle-8
-                    #   ETH-Pedcross2
-                    #   TUD-Stadtmitte
+                      KITTI-17
+                      ETH-Bahnhof
+                      ETH-Sunnyday
+                      PETS09-S2L1
+                      TUD-Campus
+                      TUD-Stadtmitte
+                      ADL-Rundle-6
+                      ADL-Rundle-8
+                      ETH-Pedcross2
+                      TUD-Stadtmitte'''
                     
-        seqs_str = '''PETS09-S2L1'''
+        seqs_str = '''ETH-Bahnhof'''
         data_root = os.path.join(opt.data_dir, 'MOT15/images/train')
     if opt.val_mot20:
         seqs_str = '''MOT20-01
