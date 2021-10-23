@@ -37,6 +37,15 @@ from cython_bbox import bbox_overlaps as bbox_ious
 from models.model import create_model, load_model
 
 
+class Logger:
+    def __init__(self, file):
+        self.file = file
+
+    def __call__(self, s):
+        print(s)
+        print(s, file=self.file)
+
+
 class MultipleEval:
     def __init__(self, start_frame, iou_thr):
         self.start_frame = start_frame
@@ -393,7 +402,7 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
                     if l2_dis is not None:
                         l2_distance_sg[attack_id].append(l2_dis)
                     if suc == 1:
-                        suc_frequency_ids[attack_id] = 1
+                        suc_frequency_ids[attack_id] = 0
                     elif suc == 2:
                         suc_frequency_ids.pop(attack_id, None)
                     elif suc == 3:
@@ -625,6 +634,9 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
                                 sg_track_outputs[key]['online_im'])
             cv2.imwrite(os.path.join(save_dir, '{:05d}.jpg'.format(frame_id)), online_im)
         frame_id += 1
+    for key in suc_frequency_ids.keys():
+        if suc_frequency_ids[key] == 0:
+            del suc_frequency_ids[key]
     suc_attacked_ids.update(set(suc_frequency_ids.keys()))
     # save results
     write_results(result_filename, results, data_type)
@@ -634,31 +646,42 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
             write_results(result_filename.replace('.txt', f'_attack_{key}.txt'), results_att_sg[key], data_type)
     elif opt.attack:
         write_results(result_filename.replace('.txt', '_attack.txt'), results_att, data_type)
-    
+
+    output_file = result_filename.replace('.txt', '_attack_result.txt')
+    print(f'output file saved in {output_file}')
+    file = open(output_file, 'w')
+    out_logger = Logger(file)
     if opt.attack == 'single' and opt.attack_id == -1:
-        print('@' * 50 + ' single attack accuracy ' + '@' * 50)
-        print(f'All attacked ids is {need_attack_ids}')
-        print(f'All successfully attacked ids is {suc_attacked_ids}')
-        print(f'All unsuccessfully attacked ids is {need_attack_ids - suc_attacked_ids}')
-        print(
+        out_logger('@' * 50 + ' single attack accuracy ' + '@' * 50)
+        out_logger(f'All attacked ids is {need_attack_ids}')
+        out_logger(f'All successfully attacked ids is {suc_attacked_ids}')
+        out_logger(f'All unsuccessfully attacked ids is {need_attack_ids - suc_attacked_ids}')
+        out_logger(
             f'The accuracy is {round(100 * len(suc_attacked_ids) / len(need_attack_ids), 2) if len(need_attack_ids) else 0}% | '
             f'{len(suc_attacked_ids)}/{len(need_attack_ids)}')
-        print(
+        out_logger(
             f'The attacked frames: {sg_attack_frames}\tmin: {min(sg_attack_frames.values()) if len(need_attack_ids) else None}\t'
             f'max: {max(sg_attack_frames.values()) if len(need_attack_ids) else None}\tmean: {sum(sg_attack_frames.values()) / len(sg_attack_frames) if len(need_attack_ids) else None}')
-        print(
+        sg_attack_frames2ids = {}
+        for key in sg_attack_frames.keys():
+            if sg_attack_frames[key] not in sg_attack_frames2ids:
+                sg_attack_frames2ids[sg_attack_frames[key]] = 0
+            sg_attack_frames2ids[sg_attack_frames[key]] += 1
+        out_logger(f'Distribute of attacked frames: {sg_attack_frames2ids}')
+        out_logger(
             f'The mean L2 distance: {dict(zip(suc_attacked_ids, [sum(l2_distance_sg[k]) / len(l2_distance_sg[k]) for k in suc_attacked_ids])) if len(suc_attacked_ids) else None}')
     elif opt.attack == 'multiple':
         eval_attack = MultipleEval(tracker.FRAME_THR, tracker.ATTACK_IOU_THR)
         success_attack_id, all_attack_id = eval_attack(result_filename, result_filename.replace('.txt', f'_attack.txt'))
-        print('@' * 50 + ' multiple attack accuracy ' + '@' * 50)
-        print(f'All attacked ids is {all_attack_id}')
-        print(f'All successfully attacked ids is {success_attack_id}')
-        print(f'All unsuccessfully attacked ids is {all_attack_id - success_attack_id}')
-        print(
+        out_logger('@' * 50 + ' multiple attack accuracy ' + '@' * 50)
+        out_logger(f'All attacked ids is {all_attack_id}')
+        out_logger(f'All successfully attacked ids is {success_attack_id}')
+        out_logger(f'All unsuccessfully attacked ids is {all_attack_id - success_attack_id}')
+        out_logger(
             f'The accuracy is {round(100 * len(success_attack_id) / len(all_attack_id), 2) if len(all_attack_id) else None}%')
-        print(f'The attacked frames: {attack_frames}')
-        print(f'The mean L2 distance: {sum(l2_distance) / len(l2_distance) if len(l2_distance) else None}')
+        out_logger(f'The attacked frames: {attack_frames}')
+        out_logger(f'The mean L2 distance: {sum(l2_distance) / len(l2_distance) if len(l2_distance) else None}')
+    file.close()
     return frame_id, timer.average_time, timer.calls, l2_distance
 
 
