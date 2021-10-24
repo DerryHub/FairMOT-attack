@@ -143,10 +143,11 @@ class MultipleEval:
         all_attack_id = set(valid_id_track_pari.keys())
         for id, track_info in valid_id_track_pari.items():
             track_id = [pre_track_id for frame_id, pre_track_id in track_info.items()]
-            track_id_set = set(track_id)
-            if -1 in track_id:
+            while -1 in track_id:
                 track_id.remove(-1)
-            if len(track_id_set) > 1:
+            origin_id = track_id[9]
+            final_index = len(track_id) - 1 - track_id[::-1].index(origin_id)
+            if final_index + 1 < len(track_id):
                 success_attack += 1
                 success_attack_id.add(id)
 
@@ -319,7 +320,7 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
     root += '/' if root[-1] != '/' else ''
     imgRoot = os.path.join(root, 'image')
     noiseRoot = os.path.join(root, 'noise')
-
+    '''
     
     for path, img, img0 in dataloader:
         if frame_id % 20 == 0:
@@ -646,7 +647,7 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
             write_results(result_filename.replace('.txt', f'_attack_{key}.txt'), results_att_sg[key], data_type)
     elif opt.attack:
         write_results(result_filename.replace('.txt', '_attack.txt'), results_att, data_type)
-
+    '''
     output_file = result_filename.replace('.txt', '_attack_result.txt')
     print(f'output file saved in {output_file}')
     file = open(output_file, 'w')
@@ -865,7 +866,7 @@ if __name__ == '__main__':
                       ETH-Pedcross2
                       TUD-Stadtmitte'''
                     
-        seqs_str = '''PETS09-S2L1'''
+        seqs_str = '''TUD-Campus'''
         data_root = os.path.join(opt.data_dir, 'MOT15/images/train')
     if opt.val_mot20:
         seqs_str = '''MOT20-01
