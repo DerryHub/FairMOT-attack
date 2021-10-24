@@ -678,7 +678,8 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
         out_logger(f'All successfully attacked ids is {success_attack_id}')
         out_logger(f'All unsuccessfully attacked ids is {all_attack_id - success_attack_id}')
         out_logger(
-            f'The accuracy is {round(100 * len(success_attack_id) / len(all_attack_id), 2) if len(all_attack_id) else None}%')
+            f'The accuracy is {round(100 * len(success_attack_id) / len(all_attack_id), 2) if len(all_attack_id) else None}% | '
+            f'{len(success_attack_id)}/{len(all_attack_id)}')
         out_logger(f'The attacked frames: {attack_frames}')
         out_logger(f'The mean L2 distance: {sum(l2_distance) / len(l2_distance) if len(l2_distance) else None}')
     file.close()

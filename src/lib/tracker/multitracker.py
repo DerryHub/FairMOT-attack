@@ -71,6 +71,14 @@ mse = torch.nn.MSELoss()
 td_ = {}
 
 
+def bbox_dis(bbox1, bbox2):
+    center1 = (bbox1[:, :2] + bbox1[:, 2:]) / 2
+    center2 = (bbox2[:, :2] + bbox2[:, 2:]) / 2
+    center1 = np.repeat(center1.reshape(-1, 1, 2), len(bbox2), axis=1)
+    center2 = np.repeat(center2.reshape(1, -1, 2), len(bbox1), axis=0)
+    dis = np.sqrt(np.sum((center1 - center2) ** 2, axis=-1))
+    return dis
+
 class STrack(BaseTrack):
     shared_kalman = KalmanFilter()
     shared_kalman_ = KalmanFilter()
@@ -821,7 +829,7 @@ class JDETracker(object):
             # if ae_attack_id == target_id and ae_target_id == attack_id:
             #     break
 
-            if i > 80:
+            if i > 60:
                 if noise_0 is not None:
                     return noise_0, i_0, suc
                 elif noise_1 is not None:
@@ -1018,12 +1026,14 @@ class JDETracker(object):
                         last_ad_id_feature = torch.from_numpy(last_ad_id_features[attack_ind]).unsqueeze(0).cuda()
                         sim_1 = torch.mm(id_feature[attack_ind:attack_ind + 1], last_ad_id_feature.T).squeeze()
                         sim_2 = torch.mm(id_feature[target_ind:target_ind + 1], last_ad_id_feature.T).squeeze()
-                        loss_feat += sim_2 - sim_1
+                        # loss_feat += sim_2 - sim_1
+                        loss_feat += torch.clamp(sim_2 - sim_1, max=0.2)
                     if last_ad_id_features[target_ind] is not None:
                         last_ad_id_feature = torch.from_numpy(last_ad_id_features[target_ind]).unsqueeze(0).cuda()
                         sim_1 = torch.mm(id_feature[target_ind:target_ind + 1], last_ad_id_feature.T).squeeze()
                         sim_2 = torch.mm(id_feature[attack_ind:attack_ind + 1], last_ad_id_feature.T).squeeze()
-                        loss_feat += sim_2 - sim_1
+                        # loss_feat += sim_2 - sim_1
+                        loss_feat += torch.clamp(sim_2 - sim_1, max=0.2)
                     if last_ad_id_features[attack_ind] is None and last_ad_id_features[target_ind] is None:
                         loss_feat += torch.mm(id_feature[attack_ind:attack_ind + 1],
                                               id_feature[target_ind:target_ind + 1].T).squeeze()
@@ -1123,7 +1133,7 @@ class JDETracker(object):
                 # else:
                 #     j += 1
             # print(torch.cat([index.view(-1, 1) // W, index.view(-1, 1) % W], dim=1))
-            if i > 80:
+            if i > 60:
                 if best_i is not None:
                     noise = best_noise
                     i = best_i
@@ -1548,9 +1558,12 @@ class JDETracker(object):
 
         attack_index = []
         for i in range(len(row_ind)):
-            if ious[row_ind[i], col_ind[i]] > 0.9 and self.multiple_ori2att[attack_ids[row_ind[i]]] \
-                    == ad_attack_ids[col_ind[i]]:
-                attack_index.append(row_ind[i])
+            if self.opt.attack == 'multiple':
+                if ious[row_ind[i], col_ind[i]] > 0.9 and self.multiple_ori2att[attack_ids[row_ind[i]]] == ad_attack_ids[col_ind[i]]:
+                    attack_index.append(row_ind[i])
+            else:
+                if ious[row_ind[i], col_ind[i]] > 0.9:
+                    attack_index.append(row_ind[i])
 
         return attack_index
 
@@ -1767,10 +1780,14 @@ class JDETracker(object):
                     ious = bbox_ious(np.ascontiguousarray(dets[:, :4], dtype=np.float64),
                                      np.ascontiguousarray(dets[:, :4], dtype=np.float64))
 
-                    ious = self.processIoUs(ious)
-                    ious = ious + ious.T
+                    ious[range(len(dets)), range(len(dets))] = 0
+                    dis = bbox_dis(np.ascontiguousarray(dets[:, :4], dtype=np.float64),
+                                   np.ascontiguousarray(dets[:, :4], dtype=np.float64))
+                    dis[range(len(dets)), range(len(dets))] = np.inf
                     target_ind = np.argmax(ious[attack_ind])
                     if ious[attack_ind][target_ind] >= self.attack_iou_thr:
+                        if ious[attack_ind][target_ind] == 0:
+                            target_ind = np.argmin(dis[attack_ind])
                         target_id = dets_ids[target_ind]
                         if fit:
                             noise, attack_iter, suc = self.ifgsm_adam_sg(
@@ -1916,9 +1933,6 @@ class JDETracker(object):
         ''' Step 2: First association, with embedding'''
         strack_pool = joint_stracks(tracked_stracks, self.lost_stracks_)
 
-        ad_unconfirmed = copy.deepcopy(self.ad_last_info['last_unconfirmed']) if self.ad_last_info else None
-        ad_strack_pool = copy.deepcopy(self.ad_last_info['last_strack_pool']) if self.ad_last_info else None
-
         STrack.multi_predict(strack_pool)
         dists = matching.embedding_distance(strack_pool, detections)
         dists = matching.fuse_motion(self.kalman_filter_, dists, strack_pool, detections)
@@ -1938,18 +1952,7 @@ class JDETracker(object):
             else:
                 track.re_activate_(det, self.frame_id_, new_id=False)
                 refind_stracks.append(track)
-            if track.exist_len > self.FRAME_THR:
-                dets_ids[dets_index[idet]] = track.track_id
-
-        # if ad_strack_pool:
-        #     STrack.multi_predict(ad_strack_pool)
-        #     dists = matching.embedding_distance(ad_strack_pool, detections)
-        #     dists = matching.fuse_motion(self.kalman_filter_, dists, ad_strack_pool, detections)
-        #     ad_matches, ad_u_track, ad_u_detection = matching.linear_assignment(dists, thresh=0.7)
-        #     for itracked, idet in ad_matches:
-        #         track = ad_strack_pool[itracked]
-        #         if dets_ids[ad_dets_index[idet]] not in self.attacked_ids and track.exist_len > self.FRAME_THR:
-        #             dets_ids[ad_dets_index[idet]] = track.track_id
+            dets_ids[dets_index[idet]] = track.track_id
 
         ''' Step 3: Second association, with IOU'''
         dets_index = [dets_index[i] for i in u_detection]
@@ -1973,20 +1976,7 @@ class JDETracker(object):
             else:
                 track.re_activate_(det, self.frame_id_, new_id=False)
                 refind_stracks.append(track)
-            if track.exist_len > self.FRAME_THR:
-                dets_ids[dets_index[idet]] = track.track_id
-
-        # if ad_strack_pool:
-        #     ad_dets_index = [ad_dets_index[i] for i in ad_u_detection]
-        #     ad_detections = [detections_[i] for i in ad_u_detection]
-        #     ad_r_tracked_stracks = [ad_strack_pool[i] for i in ad_u_track if
-        #                             ad_strack_pool[i].state == TrackState.Tracked]
-        #     dists = matching.iou_distance(ad_r_tracked_stracks, ad_detections)
-        #     ad_matches, ad_u_track, ad_u_detection = matching.linear_assignment(dists, thresh=0.5)
-        #     for itracked, idet in ad_matches:
-        #         track = ad_strack_pool[itracked]
-        #         if dets_ids[ad_dets_index[idet]] not in self.attacked_ids and track.exist_len > self.FRAME_THR:
-        #             dets_ids[ad_dets_index[idet]] = track.track_id
+            dets_ids[dets_index[idet]] = track.track_id
 
         for it in u_track:
             track = r_tracked_stracks[it]
@@ -2007,18 +1997,7 @@ class JDETracker(object):
             tracks_ad.append((unconfirmed[itracked], dets_index[idet]))
             unconfirmed[itracked].update(detections[idet], self.frame_id_)
             activated_starcks.append(unconfirmed[itracked])
-            if track.exist_len > self.FRAME_THR:
-                dets_ids[dets_index[idet]] = unconfirmed[itracked].track_id
-
-        # if ad_strack_pool:
-        #     ad_dets_index = [ad_dets_index[i] for i in ad_u_detection]
-        #     ad_detections = [ad_detections[i] for i in ad_u_detection]
-        #     dists = matching.iou_distance(ad_unconfirmed, ad_detections)
-        #     ad_matches, ad_u_unconfirmed, ad_u_detection = matching.linear_assignment(dists, thresh=0.7)
-        #     for itracked, idet in ad_matches:
-        #         track = ad_strack_pool[itracked]
-        #         if dets_ids[ad_dets_index[idet]] not in self.attacked_ids and track.exist_len > self.FRAME_THR:
-        #             dets_ids[ad_dets_index[idet]] = track.track_id
+            dets_ids[dets_index[idet]] = unconfirmed[itracked].track_id
 
         for it in u_unconfirmed:
             track = unconfirmed[it]
@@ -2033,13 +2012,8 @@ class JDETracker(object):
                 continue
             track.activate_(self.kalman_filter_, self.frame_id_)
             activated_starcks.append(track)
+            dets_ids[dets_index[inew]] = track.track_id
 
-        # if ad_strack_pool:
-        #     ad_dets_index = [ad_dets_index[i] for i in ad_u_detection]
-        #     for inew in ad_u_detection:
-        #         track = ad_detections[inew]
-        #         if dets_ids[ad_dets_index[inew]] not in self.attacked_ids and track.exist_len > self.FRAME_THR:
-        #             dets_ids[ad_dets_index[inew]] = track.track_id
         """ Step 5: Update state"""
         for track in self.lost_stracks_:
             if self.frame_id_ - track.end_frame > self.max_time_lost:
@@ -2064,7 +2038,7 @@ class JDETracker(object):
             if track.track_id not in self.multiple_ori_ids:
                 self.multiple_ori_ids[track.track_id] = 0
             self.multiple_ori_ids[track.track_id] += 1
-            if self.multiple_ori_ids[track.track_id] > 10 and track.track_id not in self.multiple_ori2att:
+            if self.multiple_ori_ids[track.track_id] <= self.FRAME_THR + 1:
                 output_stracks_ori_ind.append(ind)
 
         logger.debug('===========Frame {}=========='.format(self.frame_id_))
@@ -2085,8 +2059,13 @@ class JDETracker(object):
                              np.ascontiguousarray(dets[:, :4], dtype=np.float64))
             ious[range(len(dets)), range(len(dets))] = 0
             ious_inds = np.argmax(ious, axis=1)
+            dis = bbox_dis(np.ascontiguousarray(dets[:, :4], dtype=np.float64),
+                           np.ascontiguousarray(dets[:, :4], dtype=np.float64))
+            dis[range(len(dets)), range(len(dets))] = np.inf
+            dis_inds = np.argmin(dis, axis=1)
             for attack_ind, track_id in enumerate(dets_ids):
-                if track_id is None:
+                if track_id is None or self.multiple_ori_ids[track_id] <= self.FRAME_THR \
+                        or dets_ids[ious_inds[attack_ind]] not in self.multiple_ori2att:
                     continue
                 if ious[attack_ind, ious_inds[attack_ind]] > self.ATTACK_IOU_THR or (
                         track_id in self.low_iou_ids and ious[attack_ind, ious_inds[attack_ind]] > 0
@@ -2106,9 +2085,9 @@ class JDETracker(object):
                         self.low_iou_ids.remove(track_id)
                     else:
                         attack_ids.append(track_id)
-                        target_ids.append(dets_ids[ious_inds[attack_ind]])
+                        target_ids.append(dets_ids[dis_inds[attack_ind]])
                         attack_inds.append(attack_ind)
-                        target_inds.append(ious_inds[attack_ind])
+                        target_inds.append(dis_inds[attack_ind])
 
             fit_index = self.CheckFit(dets, id_feature, attack_ids, attack_inds) if len(attack_ids) else []
             if fit_index:
@@ -2158,7 +2137,7 @@ class JDETracker(object):
             if track.track_id not in self.multiple_att_ids:
                 self.multiple_att_ids[track.track_id] = 0
             self.multiple_att_ids[track.track_id] += 1
-            if self.multiple_att_ids[track.track_id] > 10 and track.track_id not in self.multiple_ori2att.values():
+            if self.multiple_att_ids[track.track_id] <= self.FRAME_THR + 1:
                 output_stracks_att_ind.append(ind)
         if len(output_stracks_ori_ind) and len(output_stracks_att_ind):
             ori_dets = [track.curr_tlbr for i, track in enumerate(output_stracks_ori) if i in output_stracks_ori_ind]
