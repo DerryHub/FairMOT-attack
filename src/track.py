@@ -300,6 +300,8 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
     sg_track_ids = {}
     sg_attack_frames = {}
     attack_frames = 0
+
+    all_effective_ids = set([])
     
     if save_dir:
         mkdir_if_missing(save_dir)
@@ -600,6 +602,8 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
             if tlwh[2] * tlwh[3] > opt.min_box_area and not vertical:
                 online_tlwhs.append(tlwh)
                 online_ids.append(tid)
+            if t.exist_len > 10:
+                all_effective_ids.add(t.track_id)
         timer.toc()
         # save results
         results.append((frame_id + 1, online_tlwhs, online_ids))
@@ -682,6 +686,7 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
             f'{len(success_attack_id)}/{len(all_attack_id)}')
         out_logger(f'The attacked frames: {attack_frames}')
         out_logger(f'The mean L2 distance: {sum(l2_distance) / len(l2_distance) if len(l2_distance) else None}')
+    out_logger(f'All effective ids is {all_effective_ids} | {len(all_effective_ids)}')
     file.close()
     return frame_id, timer.average_time, timer.calls, l2_distance
 

@@ -351,7 +351,7 @@ class JDETracker(object):
         self.attack_mt = True
         self.attacked_ids = set([])
         self.low_iou_ids = set([])
-        self.ATTACK_IOU_THR = 0.3
+        self.ATTACK_IOU_THR = 0.2
         self.attack_iou_thr = self.ATTACK_IOU_THR
         self.ad_last_info = copy.deepcopy(ad_last_info)
         self.FRAME_THR = 10

@@ -19,7 +19,6 @@
   * restrain
 * Generating Adversarial Videos
   * 算法流程
-* Why
 
 # method
 
@@ -35,7 +34,7 @@ Achieving a good balance between accuracy and speed, FairMOT gets extremely popu
 
 **Re-ID Branch.** Re-ID branch learn the difference of objects. Denote the feature map as $feature^t\in\R^{512\times H\times W}$. The re-ID feature $feature^t_{x,y}\in\R^{512}$ means the feature vector, whose $L_2$ norm equals to 1, of an object centered at $(x,y)$. Then cosine similarities of the features are computed in matching module to evaluate the similarity of objects.
 
-**Oline Association.** FairMOT follows the standard online tracking algorithm[2] to association boxes. In the first frame, tracklets from predicted bounding boxes and features are initialized. Then in each next frame, detected boxes are linked to the existing tracklets according to their cosine distance and their box distance.
+**Association.** FairMOT follows the standard online tracking algorithm[2] to association boxes. In the first frame, tracklets from predicted bounding boxes and features are initialized. Then in each next frame, detected boxes are linked to the existing tracklets according to their cosine distance and their box distance.
 
 ## Problem Definition
 
@@ -95,17 +94,13 @@ where $wh$ and $offset$ represent the outputs of  wh and offset head in FairMOT.
 
 ## Generating Adversarial Videos
 
-For concealment of disturbance, we should control the $L_2$ distance between adversarial image $\hat I$ and original image $I$ with $L_2$ loss as follows:
-$$
-L_{noise}=\parallel \hat I-I\parallel_2^2.\tag7
-$$
 With addition of all of the cost functions simply above, we can get a optimization goal:
 $$
-\min_{\hat V}Loss=\min_{\hat V}L_{PushPull}+L_{cet}+L_{size}+L_{noise}.\tag8
+\min_{\hat V}Loss=\min_{\hat V}L_{PushPull}+L_{cet}+L_{size}.\tag8
 $$
-Then we can get adversarial image $\hat I$ as follows:
+For concealment of disturbance, we should restrain the $L_2$ distance between adversarial image $\hat I$ and original image $I$. Then we can get adversarial image $\hat I$ as follows:
 $$
-\hat I_0=I,\hat I_t=
+\hat I_0=I,\ \hat I_{t+1}=Clip_I^{[0,1]}(\hat I_t+\frac {\nabla_ILoss(\hat I_t;\theta)}{\parallel\nabla_ILoss(\hat I_t;\theta)\parallel_2}).\tag9
 $$
 
 
