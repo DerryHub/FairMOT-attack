@@ -322,7 +322,7 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
     root += '/' if root[-1] != '/' else ''
     imgRoot = os.path.join(root, 'image')
     noiseRoot = os.path.join(root, 'noise')
-    '''
+
     
     for path, img, img0 in dataloader:
         if frame_id % 20 == 0:
@@ -635,9 +635,11 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
             os.makedirs(save_dir, exist_ok=True)
             if opt.attack == 'single' and opt.attack_id == -1:
                 for key in sg_track_outputs.keys():
-                    cv2.imwrite(os.path.join(save_dir, '{:05d}_{}.jpg'.format(frame_id, key)),
+                    cv2.imwrite(os.path.join(save_dir, '{:05d}_{}.jpg'.format(frame_id+1, key)),
                                 sg_track_outputs[key]['online_im'])
-            cv2.imwrite(os.path.join(save_dir, '{:05d}.jpg'.format(frame_id)), online_im)
+            cv2.imwrite(os.path.join(save_dir, '{:05d}.jpg'.format(frame_id+1)), online_im)
+            # if noise is not None:
+            #     cv2.imwrite(os.path.join(save_dir, '{:05d}_ori.jpg'.format(frame_id+1)), img0)
         frame_id += 1
     for key in suc_frequency_ids.keys():
         if suc_frequency_ids[key] == 0:
@@ -651,7 +653,7 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
             write_results(result_filename.replace('.txt', f'_attack_{key}.txt'), results_att_sg[key], data_type)
     elif opt.attack:
         write_results(result_filename.replace('.txt', '_attack.txt'), results_att, data_type)
-    '''
+
     output_file = result_filename.replace('.txt', '_attack_result.txt')
     print(f'output file saved in {output_file}')
     file = open(output_file, 'w')
@@ -871,7 +873,7 @@ if __name__ == '__main__':
                       ETH-Pedcross2
                       TUD-Stadtmitte'''
                     
-        seqs_str = '''TUD-Campus'''
+        seqs_str = '''PETS09-S2L1'''
         data_root = os.path.join(opt.data_dir, 'MOT15/images/train')
     if opt.val_mot20:
         seqs_str = '''MOT20-01

@@ -28,7 +28,7 @@ In this section, we propose a noval method named ID-exchanged attack for multipl
 
 ## Overview of FairMOT
 
-Achieving a good balance between accuracy and speed, FairMOT gets extremely popular in academia and industry. The fairness between the tasks of object detection and matching allows FairMOT to obtain high performance on MOT challenge datasets[5,6,7,8]. As shown in **Figure 1**, the network architecture of FairMOT consists of two homogeneous branches to predict the location of object and re-ID features. Besides the branchs, online association is also the important component of FairMOT.
+Achieving a good balance between accuracy and speed, FairMOT gets extremely popular in academia and industry. The fairness between the tasks of object detection and matching allows FairMOT to obtain high performance on MOT challenge datasets[5,6,7,8]. As shown in **Figure 2**, the network architecture of FairMOT consists of two homogeneous branches to predict the location of object and re-ID features. Besides the branchs, online association is also the important component of FairMOT.
 
 **Detection Branch.** The anchor-free detection branch of FairMOT is built on CenterNet, which predicts three heads: heatmap head, box offset head and size head. Heatmap head learns the locations of the object centers. Specifically, the dimension of the heatmap is $1\times H\times W$. We define bounding box of the $i$-th object in $t$-th frame as $box^t_i=(x_1^{t,i},y_1^{t,i},x_2^{t,i},y_2^{t,i})$. And then the object center can be respectively computed $(c_x^{t,i},c_y^{t,i})$ as $c_x^{t,i}=\frac{x_1^{t,i}+x_2^{t,i}}{2}$ and $c_y^{t,i}=\frac{y_1^{t,i}+y_2^{t,i}}{2}$. The location of the bounding box on the heatmap can be obtained by dividing the stride (4 in FairMOT) $(\lfloor\frac{c_x^{t,i}}{4}\rfloor,\lfloor\frac{c_y^{t,i}}{4}\rfloor)$. The value of heatmap means the confidence score that there is an object center at the corresponding location. Also, the goal of box offset head is to localize objects more precisely. Denote the offset and size heads in $t$-th frame as $offset^t\in\R^{2\times H\times W}$ and $size^t\in\R^{2\times H\times W}$. Similarly, the GT offset head is computed as $offset_i^t=(\frac{c_x^{t,i}}{4}-\lfloor\frac{c_x^{t,i}}{4}\rfloor,\frac{c_y^{t,i}}{4}-\lfloor\frac{c_y^{t,i}}{4}\rfloor)$ and the GT size head is computed as $size_i^t=(x_2^{t,i}-x_1^{t,i},y_2^{t,i}-y_1^{t,i})$. 
 
@@ -56,7 +56,7 @@ Denote the adversarial video $\hat V=\{I_1,\cdots,I_{t-1},\hat I_t,\cdots,\hat I
 
 ## Feature Attack with Push-Pull Loss
 
-MOT models based on combination of detection and matching, in general, learn features to represent and compute the distances of objects. It is extremely critical for the model to distinguish between trackers and objects, in particular, when objects are close to each other. In FairMOT, re-ID branch is used to predict features for objects, where locations of features in output map of re-ID branch correspond to the location of object centers. Considering that the surrounding locations of heatmap may be activated while tiny disturbance is added to the image, we calculate the distance cost with nine-block-box location, as shown in **Figure2**.
+MOT models based on combination of detection and matching, in general, learn features to represent and compute the distances of objects. It is extremely critical for the model to distinguish between trackers and objects, in particular, when objects are close to each other. In FairMOT, re-ID branch is used to predict features for objects, where locations of features in output map of re-ID branch correspond to the location of object centers. Considering that the surrounding locations of heatmap may be activated while tiny disturbance is added to the image, we calculate the distance cost with nine-block-box location, as shown in **Figure3a**.
 
 Based on the assumption above, tracker $T_i$ is intersectant with tracker $T_j$ at the $t$-th frame. Obviously, it is much weak for $T_i$ and $T_j$ at the $t$-th frame. Hence, we define a push-pull loss in single-target attack at the nine-block-box location as:
 $$
@@ -70,7 +70,7 @@ where $IDs$ represents a collection of object id intersectant with another objec
 
 ## Detection Attack with Center Leaping
 
-Objects attacked in feature, generally speaking, make useful confusing the tracker in cases of intersection. However, in most cases, as shown in **Figure3**, it is hard to attack successfully only with feature attack because the distances of bounding boxes are too large to exchange their ids. Due to the problem mentioned above, we need to reduce the distances of objects. The bounding boxes, nevertheless, are computed with discrete locations of heat points in heatmap. Therefore, we can not optimize a bounding-box loss to make objects close to each other simply.
+Objects attacked in feature, generally speaking, make useful confusing the tracker in cases of intersection. However, in most cases, it is hard to attack successfully only with feature attack because the distances of bounding boxes are too large to exchange their ids. Due to the problem mentioned above, we need to reduce the distances of objects. The bounding boxes, nevertheless, are computed with discrete locations of heat points in heatmap. Therefore, we can not optimize a bounding-box loss to make objects close to each other simply.
 
 Based on the reason above, a noval and simple method, named center leaping, is proposed to solve this problem. The optimization functions can be expressed as follows:
 $$
@@ -79,7 +79,7 @@ $$
 =& \min_{\hat {box}}\sum_{k\in\{i,j\}}Dis_{cet}(CET(K(box_{t-1}^k)),CET(\hat{box}_t^\widetilde k))+\min_{\hat {box}}\sum_{k\in\{i,j\}}Dis_{size}(SIZE(K(box_{t-1}^k)),SIZE(\hat{box}_t^\widetilde k))
 \end{aligned},\tag4
 $$
-where $\hat {box}$ means the output bounding box of adversarial image, $CET(\cdot)$ represents the location of center of box and $SIZE(\cdot)$ represents the size of box. In order to exchange the ids between the $k$-th object and the $\widetilde k$-th object, as shown in **Figure4**, the center of the $k$-th object at the $t$-th frame should close to the center of the $\widetilde k$-th object with the Kalman filter at the $(t-1)$-th frame. In the optimization process of feature attack, the center of the $k$-th object at the $t$-th frame will leap to the next grid in the direction of the center of the $\widetilde k$-th object at certain numbers of iterations. Then, a focal loss, with the same as the training process of FairMOT, will be computed with the new centers as follows:
+where $\hat {box}$ means the output bounding box of adversarial image, $CET(\cdot)$ represents the location of center of box and $SIZE(\cdot)$ represents the size of box. In order to exchange the ids between the $k$-th object and the $\widetilde k$-th object, as shown in **Figure3b**, the center of the $k$-th object at the $t$-th frame should close to the center of the $\widetilde k$-th object with the Kalman filter at the $(t-1)$-th frame. In the optimization process of feature attack, the center of the $k$-th object at the $t$-th frame will leap to the next grid in the direction of the center of the $\widetilde k$-th object at certain numbers of iterations. Then, a focal loss, with the same as the training process of FairMOT, will be computed with the new centers as follows:
 $$
 L^{FocalLoss}_{cet}=\sum_{c\in CT^{att}}\sum_{x,y\in NBB_c}-(1-HM_{x,y})^\gamma\log(HM_{x,y})+\sum_{c\in CT^{ori}}\sum_{x,y\in NBB_c}-(HM_{x,y})^\gamma\log(1-HM_{x,y}),\tag5
 $$
@@ -96,9 +96,9 @@ where $wh$ and $offset$ represent the outputs of  wh and offset head in FairMOT.
 
 With addition of all of the cost functions simply above, we can get a optimization goal:
 $$
-\min_{\hat V}Loss=\min_{\hat V}L_{PushPull}+L_{cet}+L_{size}.\tag8
+\min_{\hat V}Loss=\min_{\hat V}L_{PushPull}+L_{cet}+L_{size}+L_{noise}.\tag8
 $$
-For concealment of disturbance, we should restrain the $L_2$ distance between adversarial image $\hat I$ and original image $I$. Then we can get adversarial image $\hat I$ as follows:
+Then we can get adversarial image $\hat I$ as follows:
 $$
 \hat I_0=I,\ \hat I_{t+1}=Clip_I^{[0,1]}(\hat I_t+\frac {\nabla_ILoss(\hat I_t;\theta)}{\parallel\nabla_ILoss(\hat I_t;\theta)\parallel_2}).\tag9
 $$

@@ -181,7 +181,7 @@
 
 * train dataset: MOT 15 ，MOT 20， CalTech， CUHK-SYSU，prw
 
-* val dataset：MOT17,MOT 16, MOT15,MOT20
+* test dataset：MOT17,MOT 16, MOT15,MOT20
 
   * 计算原始预测成功的轨迹：10 -inter -20
 
