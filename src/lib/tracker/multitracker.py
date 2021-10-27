@@ -2038,7 +2038,7 @@ class JDETracker(object):
             if track.track_id not in self.multiple_ori_ids:
                 self.multiple_ori_ids[track.track_id] = 0
             self.multiple_ori_ids[track.track_id] += 1
-            if self.multiple_ori_ids[track.track_id] <= self.FRAME_THR + 1:
+            if self.multiple_ori_ids[track.track_id] <= self.FRAME_THR:
                 output_stracks_ori_ind.append(ind)
 
         logger.debug('===========Frame {}=========='.format(self.frame_id_))
@@ -2065,7 +2065,8 @@ class JDETracker(object):
             dis_inds = np.argmin(dis, axis=1)
             for attack_ind, track_id in enumerate(dets_ids):
                 if track_id is None or self.multiple_ori_ids[track_id] <= self.FRAME_THR \
-                        or dets_ids[ious_inds[attack_ind]] not in self.multiple_ori2att:
+                        or dets_ids[ious_inds[attack_ind]] not in self.multiple_ori2att \
+                        or track_id not in self.multiple_ori2att:
                     continue
                 if ious[attack_ind, ious_inds[attack_ind]] > self.ATTACK_IOU_THR or (
                         track_id in self.low_iou_ids and ious[attack_ind, ious_inds[attack_ind]] > 0
@@ -2137,7 +2138,7 @@ class JDETracker(object):
             if track.track_id not in self.multiple_att_ids:
                 self.multiple_att_ids[track.track_id] = 0
             self.multiple_att_ids[track.track_id] += 1
-            if self.multiple_att_ids[track.track_id] <= self.FRAME_THR + 1:
+            if self.multiple_att_ids[track.track_id] <= self.FRAME_THR:
                 output_stracks_att_ind.append(ind)
         if len(output_stracks_ori_ind) and len(output_stracks_att_ind):
             ori_dets = [track.curr_tlbr for i, track in enumerate(output_stracks_ori) if i in output_stracks_ori_ind]
