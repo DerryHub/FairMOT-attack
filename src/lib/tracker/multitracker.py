@@ -2084,7 +2084,7 @@ class JDETracker(object):
                         self.__setattr__(f'temp_i_{track_id}', 1)
                     if self.__getattribute__(f'temp_i_{track_id}') > 10:
                         self.low_iou_ids.remove(track_id)
-                    else:
+                    elif dets_ids[dis_inds[attack_ind]] in self.multiple_ori2att:
                         attack_ids.append(track_id)
                         target_ids.append(dets_ids[dis_inds[attack_ind]])
                         attack_inds.append(attack_ind)
