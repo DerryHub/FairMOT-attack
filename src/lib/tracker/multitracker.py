@@ -1897,7 +1897,6 @@ class JDETracker(object):
         last_id_features = [None for _ in range(len(dets))]
         last_ad_id_features = [None for _ in range(len(dets))]
         dets_index = [i for i in range(len(dets))]
-        ad_dets_index = [i for i in range(len(dets))]
         dets_ids = [None for _ in range(len(dets))]
         tracks_ad = []
 
@@ -1956,7 +1955,6 @@ class JDETracker(object):
 
         ''' Step 3: Second association, with IOU'''
         dets_index = [dets_index[i] for i in u_detection]
-        detections_ = detections
         detections = [detections[i] for i in u_detection]
         r_tracked_stracks = [strack_pool[i] for i in u_track if strack_pool[i].state == TrackState.Tracked]
         dists = matching.iou_distance(r_tracked_stracks, detections)
@@ -2005,7 +2003,6 @@ class JDETracker(object):
             removed_stracks.append(track)
 
         """ Step 4: Init new stracks"""
-        dets_index = [dets_index[i] for i in u_detection]
         for inew in u_detection:
             track = detections[inew]
             if track.score < self.det_thresh:
@@ -2064,6 +2061,7 @@ class JDETracker(object):
             dis[range(len(dets)), range(len(dets))] = np.inf
             dis_inds = np.argmin(dis, axis=1)
             for attack_ind, track_id in enumerate(dets_ids):
+
                 if track_id is None or self.multiple_ori_ids[track_id] <= self.FRAME_THR \
                         or dets_ids[ious_inds[attack_ind]] not in self.multiple_ori2att \
                         or track_id not in self.multiple_ori2att:
