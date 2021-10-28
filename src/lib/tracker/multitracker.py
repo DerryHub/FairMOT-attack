@@ -1731,7 +1731,6 @@ class JDETracker(object):
             removed_stracks.append(track)
 
         """ Step 4: Init new stracks"""
-        dets_index = [dets_index[i] for i in u_detection]
         for inew in u_detection:
             track = detections[inew]
             if track.score < self.det_thresh:
