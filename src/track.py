@@ -641,7 +641,7 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
             # if noise is not None:
             #     cv2.imwrite(os.path.join(save_dir, '{:05d}_ori.jpg'.format(frame_id+1)), img0)
         frame_id += 1
-    for key in suc_frequency_ids.keys():
+    for key in list(suc_frequency_ids.keys()):
         if suc_frequency_ids[key] == 0:
             del suc_frequency_ids[key]
     suc_attacked_ids.update(set(suc_frequency_ids.keys()))
@@ -847,7 +847,7 @@ if __name__ == '__main__':
                       MOT17-08-SDP
                       MOT17-12-SDP
                       MOT17-14-SDP'''
-        seqs_str = '''MOT17-07-SDP'''
+        # seqs_str = '''MOT17-14-SDP'''
         data_root = os.path.join(opt.data_dir, 'MOT17/images/test')
     if opt.val_mot17:
         # seqs_str = '''MOT17-02-SDP
