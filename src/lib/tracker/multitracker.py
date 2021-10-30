@@ -2028,6 +2028,10 @@ class JDETracker(object):
         self.tracked_stracks_, self.lost_stracks_ = remove_duplicate_stracks(self.tracked_stracks_, self.lost_stracks_)
         # get scores of lost tracks
         output_stracks_ori = [track for track in self.tracked_stracks_ if track.is_activated]
+        id_set = set([track.track_id for track in output_stracks_ori])
+        for i in range(len(dets_ids)):
+            if dets_ids[i] is not None and dets_ids[i] not in id_set:
+                dets_ids[i] = None
 
         output_stracks_ori_ind = []
         for ind, track in enumerate(output_stracks_ori):
@@ -2060,7 +2064,6 @@ class JDETracker(object):
             dis[range(len(dets)), range(len(dets))] = np.inf
             dis_inds = np.argmin(dis, axis=1)
             for attack_ind, track_id in enumerate(dets_ids):
-
                 if track_id is None or self.multiple_ori_ids[track_id] <= self.FRAME_THR \
                         or dets_ids[ious_inds[attack_ind]] not in self.multiple_ori2att \
                         or track_id not in self.multiple_ori2att:
