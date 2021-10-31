@@ -287,6 +287,7 @@ def evaluate_attack(result_filename_ori, result_filename_att):
 total_eff_ids = 0
 total_attack_ids = 0
 total_suc_ids = 0
+sg_attack_frames2ids = {}
 
 def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None, show_image=True, frame_rate=30):
     BaseTrack.init()
@@ -690,7 +691,7 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
         out_logger(
             f'The attacked frames: {sg_attack_frames}\tmin: {min(sg_attack_frames.values()) if len(need_attack_ids) else None}\t'
             f'max: {max(sg_attack_frames.values()) if len(need_attack_ids) else None}\tmean: {sum(sg_attack_frames.values()) / len(sg_attack_frames) if len(need_attack_ids) else None}')
-        sg_attack_frames2ids = {}
+        global sg_attack_frames2ids
         for key in sg_attack_frames.keys():
             if sg_attack_frames[key] not in sg_attack_frames2ids:
                 sg_attack_frames2ids[sg_attack_frames[key]] = 0
