@@ -289,7 +289,7 @@ total_attack_ids = 0
 total_suc_ids = 0
 sg_attack_frames2ids = {}
 
-def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None, show_image=True, frame_rate=30):
+def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None, show_image=True, frame_rate=30, msg=''):
     BaseTrack.init()
     need_attack_ids = set([])
     suc_attacked_ids = set([])
@@ -331,7 +331,7 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
     
     for path, img, img0 in dataloader:
         if frame_id % 20 == 0:
-            logger.info('Processing frame {} ({:.2f} fps)'.format(frame_id, 1. / max(1e-5, timer.average_time)))
+            logger.info('{}|Processing frame {} ({:.2f} fps)'.format(msg, frame_id, 1. / max(1e-5, timer.average_time)))
 
         sg_track_outputs = {}
 
@@ -743,7 +743,7 @@ def main(opt, data_root='/data/MOT16/train', det_root=None, seqs=('MOT16-05',), 
     accs_att = []
     n_frame = 0
     timer_avgs, timer_calls = [], []
-    for seq in seqs:
+    for seq_i, seq in enumerate(seqs):
         # import pdb;pdb.set_trace()
         output_dir = os.path.join(data_root, '..', 'outputs', exp_name, seq) if save_images or save_videos else None
         logger.info('start seq: {}'.format(seq))
@@ -760,7 +760,7 @@ def main(opt, data_root='/data/MOT16/train', det_root=None, seqs=('MOT16-05',), 
 
         nf, ta, tc, l2_distance = eval_seq(opt, dataloader, data_type, result_filename,
                                            save_dir=output_dir, show_image=show_image, frame_rate=frame_rate,
-                                           gt_dict=gt_frame_dict)
+                                           gt_dict=gt_frame_dict, msg=f'{seq_i+1}/{len(seqs)}')
 
         n_frame += nf
         timer_avgs.append(ta)
