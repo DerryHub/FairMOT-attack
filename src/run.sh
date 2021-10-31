@@ -1,3 +1,4 @@
+CUDA_VISIBLE_DEVICES=0
 python track.py mot --load_model ~/Disk/models/all_dla34.pth --conf_thres 0.4 --iou_thr 0 --attack single --output_dir /home/lindelv/Disk/data/MOT_0 --data_dir /home/lindelv/Data/MOT
 python track.py mot --load_model ~/Disk/models/all_dla34.pth --conf_thres 0.4 --iou_thr 0.05 --attack single --output_dir /home/lindelv/Disk/data/MOT_005 --data_dir /home/lindelv/Data/MOT
 python track.py mot --load_model ~/Disk/models/all_dla34.pth --conf_thres 0.4 --iou_thr 0.1 --attack single --output_dir /home/lindelv/Disk/data/MOT_010 --data_dir /home/lindelv/Data/MOT
