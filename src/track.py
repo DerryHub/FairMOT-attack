@@ -284,6 +284,10 @@ def evaluate_attack(result_filename_ori, result_filename_att):
     return mean_recall, mean_precision, mean_iou
 
 
+total_eff_ids = 0
+total_attack_ids = 0
+total_suc_ids = 0
+
 def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None, show_image=True, frame_rate=30):
     BaseTrack.init()
     need_attack_ids = set([])
@@ -591,6 +595,23 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
                 results_att.append((frame_id + 1, online_tlwhs_att, online_ids_att))
         else:
             online_targets_ori = tracker.update(blob, img0, name=path.replace(root_r, ''))
+            dets = []
+            ids = []
+            for strack in online_targets_ori:
+                if strack.track_id not in frequency_ids:
+                    frequency_ids[strack.track_id] = 0
+                frequency_ids[strack.track_id] += 1
+                if frequency_ids[strack.track_id] > tracker.FRAME_THR:
+                    ids.append(strack.track_id)
+                    dets.append(strack.curr_tlbr.reshape(1, -1))
+            if len(ids) > 0:
+                dets = np.concatenate(dets).astype(np.float64)
+                ious = bbox_ious(dets, dets)
+                ious[range(len(dets)), range(len(dets))] = 0
+                for i in range(len(dets)):
+                    for j in range(len(dets)):
+                        if ious[i, j] >= tracker.ATTACK_IOU_THR:
+                            need_attack_ids.add(ids[i])
 
         # import pdb;pdb.set_trace()
         online_tlwhs = []
@@ -679,17 +700,28 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
             f'The mean L2 distance: {dict(zip(suc_attacked_ids, [sum(l2_distance_sg[k]) / len(l2_distance_sg[k]) for k in suc_attacked_ids])) if len(suc_attacked_ids) else None}')
     elif opt.attack == 'multiple':
         eval_attack = MultipleEval(tracker.FRAME_THR, tracker.ATTACK_IOU_THR)
-        success_attack_id, all_attack_id = eval_attack(result_filename, result_filename.replace('.txt', f'_attack.txt'))
+        suc_attacked_ids, need_attack_ids = eval_attack(result_filename, result_filename.replace('.txt', f'_attack.txt'))
         out_logger('@' * 50 + ' multiple attack accuracy ' + '@' * 50)
-        out_logger(f'All attacked ids is {all_attack_id}')
-        out_logger(f'All successfully attacked ids is {success_attack_id}')
-        out_logger(f'All unsuccessfully attacked ids is {all_attack_id - success_attack_id}')
+        out_logger(f'All attacked ids is {need_attack_ids}')
+        out_logger(f'All successfully attacked ids is {suc_attacked_ids}')
+        out_logger(f'All unsuccessfully attacked ids is {need_attack_ids - suc_attacked_ids}')
         out_logger(
-            f'The accuracy is {round(100 * len(success_attack_id) / len(all_attack_id), 2) if len(all_attack_id) else None}% | '
-            f'{len(success_attack_id)}/{len(all_attack_id)}')
+            f'The accuracy is {round(100 * len(suc_attacked_ids) / len(need_attack_ids), 2) if len(need_attack_ids) else None}% | '
+            f'{len(suc_attacked_ids)}/{len(need_attack_ids)}')
         out_logger(f'The attacked frames: {attack_frames}')
         out_logger(f'The mean L2 distance: {sum(l2_distance) / len(l2_distance) if len(l2_distance) else None}')
     out_logger(f'All effective ids is {all_effective_ids} | {len(all_effective_ids)}')
+    global total_eff_ids
+    global total_attack_ids
+    global total_suc_ids
+
+    total_eff_ids += len(all_effective_ids)
+    total_attack_ids += len(need_attack_ids)
+    out_logger(f'Effective ids: {total_attack_ids / total_eff_ids if total_eff_ids > 0 else 0} | {total_attack_ids}/{total_eff_ids}')
+    total_suc_ids += len(suc_attacked_ids)
+    out_logger(
+        f'Success rate: {total_suc_ids / total_attack_ids if total_attack_ids > 0 else 0} | {total_suc_ids}/{total_attack_ids}')
+
     file.close()
     return frame_id, timer.average_time, timer.calls, l2_distance
 
@@ -783,7 +815,7 @@ def main(opt, data_root='/data/MOT16/train', det_root=None, seqs=('MOT16-05',), 
 
 
 if __name__ == '__main__':
-    os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+    # os.environ['CUDA_VISIBLE_DEVICES'] = '1'
     opt = opts().init()
 
     if opt.attack == 'single' and opt.attack_id == -1:
