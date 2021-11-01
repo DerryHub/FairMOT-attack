@@ -288,6 +288,8 @@ total_eff_ids = 0
 total_attack_ids = 0
 total_suc_ids = 0
 sg_attack_frames2ids = {}
+total_l2_dis = []
+total_attack_frame = []
 
 def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None, show_image=True, frame_rate=30, msg=''):
     BaseTrack.init()
@@ -680,6 +682,8 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
     print(f'output file saved in {output_file}')
     file = open(output_file, 'w')
     out_logger = Logger(file)
+    global total_l2_dis
+    global total_attack_frame
     if opt.attack == 'single' and opt.attack_id == -1:
         out_logger('@' * 50 + ' single attack accuracy ' + '@' * 50)
         out_logger(f'All attacked ids is {need_attack_ids}')
@@ -692,6 +696,7 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
             f'The attacked frames: {sg_attack_frames}\tmin: {min(sg_attack_frames.values()) if len(need_attack_ids) else None}\t'
             f'max: {max(sg_attack_frames.values()) if len(need_attack_ids) else None}\tmean: {sum(sg_attack_frames.values()) / len(sg_attack_frames) if len(need_attack_ids) else None}')
         global sg_attack_frames2ids
+        total_attack_frame.extend(list(sg_attack_frames.values()))
         for key in sg_attack_frames.keys():
             if sg_attack_frames[key] not in sg_attack_frames2ids:
                 sg_attack_frames2ids[sg_attack_frames[key]] = 0
@@ -699,6 +704,7 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
         out_logger(f'Distribute of attacked frames: {sg_attack_frames2ids}')
         out_logger(
             f'The mean L2 distance: {dict(zip(suc_attacked_ids, [sum(l2_distance_sg[k]) / len(l2_distance_sg[k]) for k in suc_attacked_ids])) if len(suc_attacked_ids) else None}')
+        total_l2_dis.extend([sum(l2_distance_sg[k]) / len(l2_distance_sg[k]) for k in suc_attacked_ids])
     elif opt.attack == 'multiple':
         eval_attack = MultipleEval(tracker.FRAME_THR, tracker.ATTACK_IOU_THR)
         suc_attacked_ids, need_attack_ids = eval_attack(result_filename, result_filename.replace('.txt', f'_attack.txt'))
@@ -710,7 +716,9 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
             f'The accuracy is {round(100 * len(suc_attacked_ids) / len(need_attack_ids), 2) if len(need_attack_ids) else None}% | '
             f'{len(suc_attacked_ids)}/{len(need_attack_ids)}')
         out_logger(f'The attacked frames: {attack_frames}')
+        total_attack_frame.append(attack_frames / frame_id)
         out_logger(f'The mean L2 distance: {sum(l2_distance) / len(l2_distance) if len(l2_distance) else None}')
+        total_l2_dis.extend(l2_distance)
     out_logger(f'All effective ids is {all_effective_ids} | {len(all_effective_ids)}')
     global total_eff_ids
     global total_attack_ids
@@ -718,11 +726,12 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
 
     total_eff_ids += len(all_effective_ids)
     total_attack_ids += len(need_attack_ids)
-    out_logger(f'Effective ids: {total_attack_ids / total_eff_ids if total_eff_ids > 0 else 0} | {total_attack_ids}/{total_eff_ids}')
+    out_logger(f'Total: Effective ids: {total_attack_ids / total_eff_ids if total_eff_ids > 0 else 0} | {total_attack_ids}/{total_eff_ids}')
     total_suc_ids += len(suc_attacked_ids)
     out_logger(
-        f'Success rate: {total_suc_ids / total_attack_ids if total_attack_ids > 0 else 0} | {total_suc_ids}/{total_attack_ids}')
-
+        f'Total: Success rate: {total_suc_ids / total_attack_ids if total_attack_ids > 0 else 0} | {total_suc_ids}/{total_attack_ids}')
+    out_logger(f'Total: Mean L2 distance: {sum(total_l2_dis) / len(total_l2_dis) if len(total_l2_dis) else 0} | {len(total_l2_dis)}')
+    out_logger(f'Total: Mean attack frame: {sum(total_attack_frame) / len(total_attack_frame) if len(total_attack_frame) else 0}')
     file.close()
     return frame_id, timer.average_time, timer.calls, l2_distance
 
