@@ -537,7 +537,7 @@ class JDETracker(object):
             if suc:
                 break
 
-            if i > 80:
+            if i > 60:
                 break
 
         return noise, i, suc

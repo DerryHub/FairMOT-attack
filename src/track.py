@@ -701,10 +701,10 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
             if sg_attack_frames[key] not in sg_attack_frames2ids:
                 sg_attack_frames2ids[sg_attack_frames[key]] = 0
             sg_attack_frames2ids[sg_attack_frames[key]] += 1
-        out_logger(f'Distribute of attacked frames: {sg_attack_frames2ids}')
         out_logger(
             f'The mean L2 distance: {dict(zip(suc_attacked_ids, [sum(l2_distance_sg[k]) / len(l2_distance_sg[k]) for k in suc_attacked_ids])) if len(suc_attacked_ids) else None}')
         total_l2_dis.extend([sum(l2_distance_sg[k]) / len(l2_distance_sg[k]) for k in suc_attacked_ids])
+        out_logger(f'Total: Distribute of attacked frames: {sg_attack_frames2ids}')
     elif opt.attack == 'multiple':
         eval_attack = MultipleEval(tracker.FRAME_THR, tracker.ATTACK_IOU_THR)
         suc_attacked_ids, need_attack_ids = eval_attack(result_filename, result_filename.replace('.txt', f'_attack.txt'))
