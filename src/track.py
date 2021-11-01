@@ -646,7 +646,9 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
                 online_im = vis.plot_tracking(img0, online_tlwhs, online_ids, frame_id=frame_id,
                                               fps=1. / timer.average_time)
             elif opt.attack:
-                img0 = adImg.astype(np.uint8)
+                img0 = cv2.resize(adImg.astype(np.float64), (img0.shape[1], img0.shape[0])).astype(np.uint8)
+
+                # img0 = adImg.astype(np.uint8)
                 online_im = vis.plot_tracking(img0, online_tlwhs_att, online_ids_att, frame_id=frame_id,
                                               fps=1. / timer.average_time)
             else:
@@ -915,7 +917,7 @@ if __name__ == '__main__':
                       ETH-Pedcross2
                       TUD-Stadtmitte'''
                     
-        seqs_str = '''PETS09-S2L1'''
+        seqs_str = '''Venice-2'''
         data_root = os.path.join(opt.data_dir, 'MOT15/images/train')
     if opt.val_mot20:
         seqs_str = '''MOT20-01
