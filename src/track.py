@@ -69,28 +69,27 @@ class MultipleEval:
     @staticmethod
     def tracks_pari(origin_frame2id, attack_frame2id, valid_id2frame):
         tracks_pair_dic = {}
-        for id,info in valid_id2frame.items():
-            tracks_pair_dic[id] = dict((frame_id,-1) for frame_id in info['frames'])
+        for id, info in valid_id2frame.items():
+            tracks_pair_dic[id] = dict((frame_id, -1) for frame_id in info['frames'])
 
-        for frame_id,frame_info in origin_frame2id.items():
-                origin_bbox_info = [ [id,bbox] for id,bbox  in frame_info.items()]
-                origin_bbox =np.array([info[1] for info in origin_bbox_info])
-                origin_id = [info[0] for info in origin_bbox_info]
-                attack_bbox_info = [ [id,bbox] for id,bbox  in attack_frame2id[frame_id].items()    ]
-                attack_bbox = np.array([info[1] for info in attack_bbox_info])
-                attack_id = [info[0] for info in attack_bbox_info]
-                origin_bbox[:,2:] = origin_bbox[:,2:] + origin_bbox[:,:2]
-                attack_bbox[:,2:] = attack_bbox[:,2:] + attack_bbox[:,:2]
-                iou = bbox_ious(origin_bbox, attack_bbox)
-                origin_inds,attack_inds = linear_sum_assignment(1-iou)
+        for frame_id, frame_info in origin_frame2id.items():
+            origin_bbox_info = [[id, bbox] for id, bbox in frame_info.items()]
+            origin_bbox = np.array([info[1] for info in origin_bbox_info])
+            origin_id = [info[0] for info in origin_bbox_info]
+            attack_bbox_info = [[id, bbox] for id, bbox in attack_frame2id[frame_id].items()]
+            attack_bbox = np.array([info[1] for info in attack_bbox_info])
+            attack_id = [info[0] for info in attack_bbox_info]
+            origin_bbox[:, 2:] = origin_bbox[:, 2:] + origin_bbox[:, :2]
+            attack_bbox[:, 2:] = attack_bbox[:, 2:] + attack_bbox[:, :2]
+            iou = bbox_ious(origin_bbox, attack_bbox)
+            origin_inds, attack_inds = linear_sum_assignment(1 - iou)
 
-                for origin_ind,attack_ind in zip(origin_inds,attack_inds):
-                    if origin_id[origin_ind] in valid_id2frame and iou[origin_ind,attack_ind] > 0.5:
-                        tracks_pair_dic[origin_id[origin_ind]][frame_id] = attack_id[attack_ind]
-                    else:
-                        continue
+            for origin_ind, attack_ind in zip(origin_inds, attack_inds):
+                if origin_id[origin_ind] in valid_id2frame and iou[origin_ind, attack_ind] > 0.5:
+                    tracks_pair_dic[origin_id[origin_ind]][frame_id] = attack_id[attack_ind]
+                else:
+                    continue
         return tracks_pair_dic
-
 
     def get_valid_ids(self, frame2id, id2frame):
         eval_id = []
@@ -101,7 +100,6 @@ class MultipleEval:
                 valid_frames = list(id2frame[id].keys())
                 valid_frames.sort()
                 for frame in valid_frames[10:]:
-
                     if self.eval_frame(frame2id, frame, id):
                         if id not in valid_id2frame:
                             valid_id2frame[id] = {}
@@ -110,34 +108,32 @@ class MultipleEval:
                             valid_id2frame[id]['intersect_frames'] = [frame]
                         else:
                             valid_id2frame[id]['intersect_frames'].append(frame)
-        
+
         return valid_id2frame
 
     def eval_frame(self, frame2id, frame_id, persion_id):
         bbox = frame2id[frame_id][persion_id]
         bbox = np.array([bbox])
-        bbox[:,2:] = bbox[:,2:] + bbox[:,:2]
+        bbox[:, 2:] = bbox[:, 2:] + bbox[:, :2]
         comp_bbox = np.array([bbox for id, bbox in frame2id[frame_id].items() if id != persion_id])
 
         if len(comp_bbox) == 0:
             return False
 
-        comp_bbox[:,2:] = comp_bbox[:,2:] + comp_bbox[:,:2]
-        ious = bbox_ious(bbox,comp_bbox)
-        
+        comp_bbox[:, 2:] = comp_bbox[:, 2:] + comp_bbox[:, :2]
+        ious = bbox_ious(bbox, comp_bbox)
+
         if (ious > self.iou_thr).any():
             return True
         return False
 
-
-
     def __call__(self, origin_path, attack_path):
         origin_frame2id, origin_id2frame = self.read_result(origin_path)
         attack_frame2id, attack_id2frame = self.read_result(attack_path)
-        
+
         valid_id2frame = self.get_valid_ids(origin_frame2id, origin_id2frame)
         valid_id_track_pari = self.tracks_pari(origin_frame2id, attack_frame2id, valid_id2frame)
-        
+
         success_attack = 0
         success_attack_id = set([])
         all_attack_id = set(valid_id_track_pari.keys())
@@ -293,7 +289,9 @@ sg_attack_frames2ids = {}
 total_l2_dis = []
 total_attack_frame = []
 
-def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None, show_image=True, frame_rate=30, msg=''):
+
+def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None, show_image=True, frame_rate=30,
+             msg=''):
     BaseTrack.init()
     need_attack_ids = set([])
     suc_attacked_ids = set([])
@@ -312,7 +310,7 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
     attack_frames = 0
 
     all_effective_ids = set([])
-    
+
     if save_dir:
         mkdir_if_missing(save_dir)
     model = create_model(opt.arch, opt.heads, opt.head_conv)
@@ -332,7 +330,6 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
     imgRoot = os.path.join(root, 'image')
     noiseRoot = os.path.join(root, 'noise')
 
-    
     for path, img, img0 in dataloader:
         if frame_id % 20 == 0:
             logger.info('{}|Processing frame {} ({:.2f} fps)'.format(msg, frame_id, 1. / max(1e-5, timer.average_time)))
@@ -362,7 +359,7 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
                     ious[range(len(dets)), range(len(dets))] = 0
                     for i in range(len(dets)):
                         for j in range(len(dets)):
-                            if ious[i, j] > tracker.ATTACK_IOU_THR:
+                            if ious[i, j] >= tracker.ATTACK_IOU_THR:
                                 need_attack_ids.add(ids[i])
 
                 for attack_id in need_attack_ids:
@@ -392,7 +389,8 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
                             track_id=sg_track_ids[attack_id]
                         )
                     elif opt.method == 'feat':
-                        _, output_stracks_att, adImg, noise, l2_dis, suc = trackers_dic[attack_id].update_attack_sg_feat(
+                        _, output_stracks_att, adImg, noise, l2_dis, suc = trackers_dic[
+                            attack_id].update_attack_sg_feat(
                             blob,
                             img0,
                             name=path.replace(root_r, ''),
@@ -589,9 +587,9 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
             os.makedirs(save_dir, exist_ok=True)
             if opt.attack == 'single' and opt.attack_id == -1:
                 for key in sg_track_outputs.keys():
-                    cv2.imwrite(os.path.join(save_dir, '{:05d}_{}.jpg'.format(frame_id+1, key)),
+                    cv2.imwrite(os.path.join(save_dir, '{:05d}_{}.jpg'.format(frame_id + 1, key)),
                                 sg_track_outputs[key]['online_im'])
-            cv2.imwrite(os.path.join(save_dir, '{:05d}.jpg'.format(frame_id+1)), online_im)
+            cv2.imwrite(os.path.join(save_dir, '{:05d}.jpg'.format(frame_id + 1)), online_im)
             # if noise is not None:
             #     cv2.imwrite(os.path.join(save_dir, '{:05d}_ori.jpg'.format(frame_id+1)), img0)
         frame_id += 1
@@ -637,7 +635,8 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
         out_logger(f'Total: Distribute of attacked frames: {sg_attack_frames2ids}')
     elif opt.attack == 'multiple':
         eval_attack = MultipleEval(tracker.FRAME_THR, tracker.ATTACK_IOU_THR)
-        suc_attacked_ids, need_attack_ids = eval_attack(result_filename, result_filename.replace('.txt', f'_attack.txt'))
+        suc_attacked_ids, need_attack_ids = eval_attack(result_filename,
+                                                        result_filename.replace('.txt', f'_attack.txt'))
         out_logger('@' * 50 + ' multiple attack accuracy ' + '@' * 50)
         out_logger(f'All attacked ids is {need_attack_ids}')
         out_logger(f'All successfully attacked ids is {suc_attacked_ids}')
@@ -656,12 +655,15 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
 
     total_eff_ids += len(all_effective_ids)
     total_attack_ids += len(need_attack_ids)
-    out_logger(f'Total: Effective ids: {total_attack_ids / total_eff_ids if total_eff_ids > 0 else 0} | {total_attack_ids}/{total_eff_ids}')
+    out_logger(
+        f'Total: Effective ids: {total_attack_ids / total_eff_ids if total_eff_ids > 0 else 0} | {total_attack_ids}/{total_eff_ids}')
     total_suc_ids += len(suc_attacked_ids)
     out_logger(
         f'Total: Success rate: {total_suc_ids / total_attack_ids if total_attack_ids > 0 else 0} | {total_suc_ids}/{total_attack_ids}')
-    out_logger(f'Total: Mean L2 distance: {sum(total_l2_dis) / len(total_l2_dis) if len(total_l2_dis) else 0} | {len(total_l2_dis)}')
-    out_logger(f'Total: Mean attack frame: {sum(total_attack_frame) / len(total_attack_frame) if len(total_attack_frame) else 0}')
+    out_logger(
+        f'Total: Mean L2 distance: {sum(total_l2_dis) / len(total_l2_dis) if len(total_l2_dis) else 0} | {len(total_l2_dis)}')
+    out_logger(
+        f'Total: Mean attack frame: {sum(total_attack_frame) / len(total_attack_frame) if len(total_attack_frame) else 0}')
     file.close()
     return frame_id, timer.average_time, timer.calls, l2_distance
 
@@ -699,7 +701,7 @@ def main(opt, data_root='/data/MOT16/train', det_root=None, seqs=('MOT16-05',), 
 
         nf, ta, tc, l2_distance = eval_seq(opt, dataloader, data_type, result_filename,
                                            save_dir=output_dir, show_image=show_image, frame_rate=frame_rate,
-                                           gt_dict=gt_frame_dict, msg=f'{seq_i+1}/{len(seqs)}')
+                                           gt_dict=gt_frame_dict, msg=f'{seq_i + 1}/{len(seqs)}')
 
         n_frame += nf
         timer_avgs.append(ta)
@@ -851,7 +853,7 @@ if __name__ == '__main__':
                       ADL-Rundle-8
                       ETH-Pedcross2
                       TUD-Stadtmitte'''
-                    
+
         seqs_str = '''Venice-2'''
         data_root = os.path.join(opt.data_dir, 'MOT15/images/train')
     if opt.val_mot20:
