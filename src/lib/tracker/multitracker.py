@@ -1998,20 +1998,36 @@ class JDETracker(object):
                 else:
                     print(f'attack ids: {attack_ids}\tattack frame {self.frame_id_}: FAIL\tl2 distance: {(noise ** 2).sum().sqrt().item()}\titeration: {attack_iter}')
 
+        # if noise is not None:
+        #     l2_dis = (noise ** 2).sum().sqrt().item()
+        #     im_blob = torch.clip(im_blob + noise, min=0, max=1)
+        #
+        #     noise = self.recoverNoise(noise, img0)
+        #     adImg = np.clip(img0 + noise, a_min=0, a_max=255)
+        #
+        #     noise = (noise - np.min(noise)) / (np.max(noise) - np.min(noise))
+        #     noise = (noise * 255).astype(np.uint8)
+        # else:
+        #     l2_dis = None
+        #     adImg = img0
+
         if noise is not None:
             l2_dis = (noise ** 2).sum().sqrt().item()
-            im_blob = torch.clip(im_blob + noise, min=0, max=1)
+            adImg = torch.clip(im_blob + noise, min=0, max=1)
 
             noise = self.recoverNoise(noise, img0)
-            adImg = np.clip(img0 + noise, a_min=0, a_max=255)
+            # adImg = np.clip(img0 + noise, a_min=0, a_max=255)
 
+            # noise = adImg - img0
             noise = (noise - np.min(noise)) / (np.max(noise) - np.min(noise))
             noise = (noise * 255).astype(np.uint8)
         else:
             l2_dis = None
-            adImg = img0
+            adImg = im_blob
 
-        output_stracks_att = self.update(im_blob, img0)
+        output_stracks_att = self.update(adImg, img0)
+        adImg = self.recoverNoise(adImg.detach(), img0)
+
         output_stracks_att_ind = []
         for ind, track in enumerate(output_stracks_att):
             if track.track_id not in self.multiple_att_ids:
