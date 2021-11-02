@@ -944,10 +944,8 @@ class JDETracker(object):
                         sim_2 = torch.mm(id_feature[target_ind:target_ind + 1], last_ad_id_feature.T).squeeze()
                         if not self.opt.no_hard_sample:
                             loss_feat += torch.clamp(sim_2 - sim_1, max=0.2)
-                            print('hs')
                         else:
                             loss_feat += sim_2 - sim_1
-                            print('nhs')
                     if last_ad_id_features[target_ind] is not None:
                         last_ad_id_feature = torch.from_numpy(last_ad_id_features[target_ind]).unsqueeze(0).cuda()
                         sim_1 = torch.mm(id_feature[target_ind:target_ind + 1], last_ad_id_feature.T).squeeze()
