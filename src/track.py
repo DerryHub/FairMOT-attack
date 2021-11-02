@@ -145,7 +145,9 @@ class MultipleEval:
             track_id = [pre_track_id for frame_id, pre_track_id in track_info.items()]
             while -1 in track_id:
                 track_id.remove(-1)
-            origin_id = track_id[9]
+            if len(track_id) < self.start_frame:
+                continue
+            origin_id = track_id[self.start_frame - 1]
             final_index = len(track_id) - 1 - track_id[::-1].index(origin_id)
             if final_index + 1 < len(track_id):
                 success_attack += 1
