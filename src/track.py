@@ -123,7 +123,7 @@ class MultipleEval:
         comp_bbox[:, 2:] = comp_bbox[:, 2:] + comp_bbox[:, :2]
         ious = bbox_ious(bbox, comp_bbox)
 
-        if (ious > self.iou_thr).any():
+        if (ious >= self.iou_thr).any():
             return True
         return False
 
@@ -345,22 +345,19 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
                 online_targets_ori = tracker.update(blob, img0, name=path.replace(root_r, ''), track_id=track_id)
                 dets = []
                 ids = []
-
                 for strack in online_targets_ori:
                     if strack.track_id not in frequency_ids:
                         frequency_ids[strack.track_id] = 0
                     frequency_ids[strack.track_id] += 1
-                    if frequency_ids[strack.track_id] > tracker.FRAME_THR:
-                        ids.append(strack.track_id)
-                        dets.append(strack.curr_tlbr.reshape(1, -1))
+                    ids.append(strack.track_id)
+                    dets.append(strack.curr_tlbr.reshape(1, -1))
                 if len(ids) > 0:
                     dets = np.concatenate(dets).astype(np.float64)
                     ious = bbox_ious(dets, dets)
                     ious[range(len(dets)), range(len(dets))] = 0
                     for i in range(len(dets)):
-                        for j in range(len(dets)):
-                            if ious[i, j] >= tracker.ATTACK_IOU_THR:
-                                need_attack_ids.add(ids[i])
+                        if (ious[i] >= tracker.ATTACK_IOU_THR).sum() > 0 and frequency_ids[ids[i]] > tracker.FRAME_THR:
+                            need_attack_ids.add(ids[i])
 
                 for attack_id in need_attack_ids:
                     if attack_id in suc_attacked_ids:
@@ -530,17 +527,15 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
                 if strack.track_id not in frequency_ids:
                     frequency_ids[strack.track_id] = 0
                 frequency_ids[strack.track_id] += 1
-                if frequency_ids[strack.track_id] > tracker.FRAME_THR:
-                    ids.append(strack.track_id)
-                    dets.append(strack.curr_tlbr.reshape(1, -1))
+                ids.append(strack.track_id)
+                dets.append(strack.curr_tlbr.reshape(1, -1))
             if len(ids) > 0:
                 dets = np.concatenate(dets).astype(np.float64)
                 ious = bbox_ious(dets, dets)
                 ious[range(len(dets)), range(len(dets))] = 0
                 for i in range(len(dets)):
-                    for j in range(len(dets)):
-                        if ious[i, j] >= tracker.ATTACK_IOU_THR:
-                            need_attack_ids.add(ids[i])
+                    if (ious[i] >= tracker.ATTACK_IOU_THR).sum() > 0 and frequency_ids[ids[i]] > tracker.FRAME_THR:
+                        need_attack_ids.add(ids[i])
 
         # import pdb;pdb.set_trace()
         online_tlwhs = []
@@ -828,7 +823,7 @@ if __name__ == '__main__':
         #               MOT17-08-SDP
         #               MOT17-12-SDP
         #               MOT17-14-SDP'''
-        # seqs_str = '''MOT17-01-SDP'''
+        seqs_str = '''MOT17-14-SDP'''
         data_root = os.path.join(opt.data_dir, 'MOT17/images/test')
     if opt.val_mot17:
         # seqs_str = '''MOT17-02-SDP
