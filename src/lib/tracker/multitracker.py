@@ -468,10 +468,7 @@ class JDETracker(object):
             last_info,
             outputs_ori,
             attack_id,
-            attack_ind,
-            lr=0.001,
-            beta_1=0.9,
-            beta_2=0.999
+            attack_ind
     ):
         noise = torch.zeros_like(im_blob)
         im_blob_ori = im_blob.clone().data
@@ -546,10 +543,7 @@ class JDETracker(object):
             attack_id,
             attack_ind,
             target_id,
-            target_ind,
-            lr=0.1,
-            beta_1=0.9,
-            beta_2=0.999
+            target_ind
     ):
         img0_h, img0_w = img0.shape[:2]
         H, W = outputs_ori['hm'].size()[2:]
@@ -829,7 +823,6 @@ class JDETracker(object):
                 elif noise_1 is not None:
                     return noise_1, i_1, suc
                 if self.opt.no_f_noise:
-                    print('nfn')
                     return None, i, False
                 else:
                     suc = False
