@@ -817,14 +817,14 @@ if __name__ == '__main__':
                       MOT17-08-SDP
                       MOT17-12-SDP
                       MOT17-14-SDP'''
-        seqs_str = '''MOT17-01-SDP
-                      MOT17-03-SDP
-                      MOT17-06-SDP'''
-        seqs_str = '''MOT17-07-SDP
-                      MOT17-08-SDP
-                      MOT17-12-SDP
-                      MOT17-14-SDP'''
-        seqs_str = '''MOT17-01-SDP'''
+        # seqs_str = '''MOT17-01-SDP
+        #               MOT17-03-SDP
+        #               MOT17-06-SDP'''
+        # seqs_str = '''MOT17-07-SDP
+        #               MOT17-08-SDP
+        #               MOT17-12-SDP
+        #               MOT17-14-SDP'''
+        # seqs_str = '''MOT17-01-SDP'''
         data_root = os.path.join(opt.data_dir, 'MOT17/images/test')
     if opt.val_mot17:
         # seqs_str = '''MOT17-02-SDP
