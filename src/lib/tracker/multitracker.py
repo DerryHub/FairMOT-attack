@@ -942,14 +942,20 @@ class JDETracker(object):
                         last_ad_id_feature = torch.from_numpy(last_ad_id_features[attack_ind]).unsqueeze(0).cuda()
                         sim_1 = torch.mm(id_feature[attack_ind:attack_ind + 1], last_ad_id_feature.T).squeeze()
                         sim_2 = torch.mm(id_feature[target_ind:target_ind + 1], last_ad_id_feature.T).squeeze()
-                        # loss_feat += sim_2 - sim_1
-                        loss_feat += torch.clamp(sim_2 - sim_1, max=0.2)
+                        if self.opt.hard_sample:
+                            loss_feat += torch.clamp(sim_2 - sim_1, max=0.2)
+                            print('hs')
+                        else:
+                            loss_feat += sim_2 - sim_1
+                            print('nhs')
                     if last_ad_id_features[target_ind] is not None:
                         last_ad_id_feature = torch.from_numpy(last_ad_id_features[target_ind]).unsqueeze(0).cuda()
                         sim_1 = torch.mm(id_feature[target_ind:target_ind + 1], last_ad_id_feature.T).squeeze()
                         sim_2 = torch.mm(id_feature[attack_ind:attack_ind + 1], last_ad_id_feature.T).squeeze()
-                        # loss_feat += sim_2 - sim_1
-                        loss_feat += torch.clamp(sim_2 - sim_1, max=0.2)
+                        if self.opt.hard_sample:
+                            loss_feat += torch.clamp(sim_2 - sim_1, max=0.2)
+                        else:
+                            loss_feat += sim_2 - sim_1
                     if last_ad_id_features[attack_ind] is None and last_ad_id_features[target_ind] is None:
                         loss_feat += torch.mm(id_feature[attack_ind:attack_ind + 1],
                                               id_feature[target_ind:target_ind + 1].T).squeeze()
