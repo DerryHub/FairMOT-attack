@@ -2683,17 +2683,16 @@ class JDETracker(object):
 
         if noise is not None:
             l2_dis = (noise ** 2).sum().sqrt().item()
-            im_blob = torch.clip(im_blob + noise, min=0, max=1)
+            adImg = torch.clip(im_blob + noise, min=0, max=1)
 
             noise = self.recoverNoise(noise, img0)
-            adImg = np.clip(img0 + noise, a_min=0, a_max=255)
-
             noise = (noise - np.min(noise)) / (np.max(noise) - np.min(noise))
             noise = (noise * 255).astype(np.uint8)
         else:
             l2_dis = None
-            adImg = img0
-        output_stracks_att = self.update(im_blob, img0, track_id=self_track_id_att)
+            adImg = im_blob
+        output_stracks_att = self.update(adImg, img0, track_id=self_track_id_att)
+        adImg = self.recoverNoise(adImg.detach(), img0)
 
         return output_stracks_ori, output_stracks_att, adImg, noise, l2_dis, suc
 
