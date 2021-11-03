@@ -123,7 +123,7 @@ class MultipleEval:
         comp_bbox[:, 2:] = comp_bbox[:, 2:] + comp_bbox[:, :2]
         ious = bbox_ious(bbox, comp_bbox)
 
-        if (ious >= self.iou_thr).any():
+        if (ious > self.iou_thr).any():
             return True
         return False
 
@@ -356,7 +356,7 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
                     ious = bbox_ious(dets, dets)
                     ious[range(len(dets)), range(len(dets))] = 0
                     for i in range(len(dets)):
-                        if (ious[i] >= tracker.ATTACK_IOU_THR).sum() > 0 and frequency_ids[ids[i]] > tracker.FRAME_THR:
+                        if (ious[i] > tracker.ATTACK_IOU_THR).sum() > 0 and frequency_ids[ids[i]] > tracker.FRAME_THR:
                             need_attack_ids.add(ids[i])
 
                 for attack_id in need_attack_ids:
@@ -534,7 +534,7 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
                 ious = bbox_ious(dets, dets)
                 ious[range(len(dets)), range(len(dets))] = 0
                 for i in range(len(dets)):
-                    if (ious[i] >= tracker.ATTACK_IOU_THR).sum() > 0 and frequency_ids[ids[i]] > tracker.FRAME_THR:
+                    if (ious[i] > tracker.ATTACK_IOU_THR).sum() > 0 and frequency_ids[ids[i]] > tracker.FRAME_THR:
                         need_attack_ids.add(ids[i])
 
         # import pdb;pdb.set_trace()
