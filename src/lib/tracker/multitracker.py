@@ -726,7 +726,7 @@ class JDETracker(object):
 
         noise = torch.rand(im_blob_ori.size()).to(im_blob_ori.device)
         noise /= (noise ** 2).sum().sqrt()
-        noise *= random.uniform(5, 10)
+        noise *= random.uniform(2, 8)
 
         im_blob = torch.clip(im_blob_ori + noise, min=0, max=1).data
         id_features, outputs, fail_ids = self.forwardFeatureMt(
@@ -739,7 +739,8 @@ class JDETracker(object):
             attack_inds,
             target_ids,
             target_inds,
-            last_info
+            last_info,
+            grad=False
         )
         if fail_ids == 0:
             suc = True
@@ -1303,7 +1304,7 @@ class JDETracker(object):
         return id_features_, output, ae_attack_id, ae_target_id, hm_index
 
     def forwardFeatureMt(self, im_blob, img0, dets_, inds_, remain_inds_, attack_ids, attack_inds, target_ids,
-                         target_inds, last_info):
+                         target_inds, last_info, grad=True):
         width = img0.shape[1]
         height = img0.shape[0]
         inp_height = im_blob.shape[2]
@@ -1316,7 +1317,11 @@ class JDETracker(object):
 
         im_blob.requires_grad = True
         self.model.zero_grad()
-        output = self.model(im_blob)[-1]
+        if grad:
+            output = self.model(im_blob)[-1]
+        else:
+            with torch.no_grad():
+                output = self.model(im_blob)[-1]
         hm = output['hm'].sigmoid()
         wh = output['wh']
         id_feature = output['id']
