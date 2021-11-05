@@ -487,9 +487,9 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
 
             if opt.attack == 'single' and opt.attack_id == -1:
                 for key in sg_track_outputs.keys():
-                    cv2.imwrite(imgPath.replace('.jpg', f'_{key}.jpg'), sg_track_outputs[key]['adImg'])
-                    if sg_track_outputs[key]['noise'] is not None:
-                        cv2.imwrite(noisePath.replace('.jpg', f'_{key}.jpg'), sg_track_outputs[key]['noise'])
+                    # cv2.imwrite(imgPath.replace('.jpg', f'_{key}.jpg'), sg_track_outputs[key]['adImg'])
+                    # if sg_track_outputs[key]['noise'] is not None:
+                    #     cv2.imwrite(noisePath.replace('.jpg', f'_{key}.jpg'), sg_track_outputs[key]['noise'])
                     online_tlwhs_att = []
                     online_ids_att = []
                     for t in sg_track_outputs[key]['output_stracks_att']:
