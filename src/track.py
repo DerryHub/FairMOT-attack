@@ -296,6 +296,7 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
     need_attack_ids = set([])
     suc_attacked_ids = set([])
     frequency_ids = {}
+    att_frequency_ids = {}
     trackers_dic = {}
     suc_frequency_ids = {}
 
@@ -362,6 +363,12 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
                 for attack_id in need_attack_ids:
                     if attack_id in suc_attacked_ids:
                         continue
+                    if opt.rand:
+                        if attack_id not in att_frequency_ids:
+                            att_frequency_ids[attack_id] = 0
+                        att_frequency_ids[attack_id] += 1
+                        if att_frequency_ids[attack_id] > 30:
+                            continue
                     if attack_id not in trackers_dic:
                         trackers_dic[attack_id] = JDETracker(
                             opt,
@@ -873,5 +880,5 @@ if __name__ == '__main__':
          seqs=seqs,
          exp_name='all_dla34',
          show_image=False,
-         save_images=False,
+         save_images=True,
          save_videos=False)

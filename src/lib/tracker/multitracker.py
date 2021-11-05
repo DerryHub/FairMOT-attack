@@ -360,6 +360,7 @@ class JDETracker(object):
         self.multiple_ori_ids = {}
         self.multiple_att_ids = {}
         self.multiple_ori2att = {}
+        self.multiple_att_freq = {}
 
     def post_process(self, dets, meta):
         dets = dets.detach().cpu().numpy()
@@ -2050,6 +2051,8 @@ class JDETracker(object):
                         or dets_ids[ious_inds[attack_ind]] not in self.multiple_ori2att \
                         or track_id not in self.multiple_ori2att:
                     continue
+                if self.opt.rand and self.multiple_att_freq[track_id] > 30:
+                    continue
                 if ious[attack_ind, ious_inds[attack_ind]] > self.ATTACK_IOU_THR or (
                         track_id in self.low_iou_ids and ious[attack_ind, ious_inds[attack_ind]] > 0
                 ):
@@ -2071,7 +2074,10 @@ class JDETracker(object):
                         target_ids.append(dets_ids[dis_inds[attack_ind]])
                         attack_inds.append(attack_ind)
                         target_inds.append(dis_inds[attack_ind])
-
+            for attack_id in attack_ids:
+                if attack_id not in self.multiple_att_freq:
+                    self.multiple_att_freq[attack_id] = 0
+                self.multiple_att_freq[attack_id] += 1
             fit_index = self.CheckFit(dets, id_feature, attack_ids, attack_inds) if len(attack_ids) else []
             if fit_index:
                 attack_ids = np.array(attack_ids)[fit_index]
