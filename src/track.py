@@ -556,9 +556,10 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
         if show_image or save_dir is not None:
             if opt.attack == 'single' and opt.attack_id == -1:
                 for key in sg_track_outputs.keys():
-                    img0 = sg_track_outputs[key]['adImg'].astype(np.uint8)
+                    adImg = sg_track_outputs[key]['adImg']
+                    adImg = cv2.resize(adImg.astype(np.float64), (img0.shape[1], img0.shape[0])).astype(np.uint8)
                     sg_track_outputs[key]['online_im'] = vis.plot_tracking(
-                        img0,
+                        adImg,
                         sg_track_outputs[key]['online_tlwhs_att'],
                         sg_track_outputs[key]['online_ids_att'],
                         frame_id=frame_id,
