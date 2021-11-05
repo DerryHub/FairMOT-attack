@@ -2051,8 +2051,6 @@ class JDETracker(object):
                         or dets_ids[ious_inds[attack_ind]] not in self.multiple_ori2att \
                         or track_id not in self.multiple_ori2att:
                     continue
-                if self.opt.rand and self.multiple_att_freq[track_id] > 30:
-                    continue
                 if ious[attack_ind, ious_inds[attack_ind]] > self.ATTACK_IOU_THR or (
                         track_id in self.low_iou_ids and ious[attack_ind, ious_inds[attack_ind]] > 0
                 ):
@@ -2074,10 +2072,6 @@ class JDETracker(object):
                         target_ids.append(dets_ids[dis_inds[attack_ind]])
                         attack_inds.append(attack_ind)
                         target_inds.append(dis_inds[attack_ind])
-            for attack_id in attack_ids:
-                if attack_id not in self.multiple_att_freq:
-                    self.multiple_att_freq[attack_id] = 0
-                self.multiple_att_freq[attack_id] += 1
             fit_index = self.CheckFit(dets, id_feature, attack_ids, attack_inds) if len(attack_ids) else []
             if fit_index:
                 attack_ids = np.array(attack_ids)[fit_index]
@@ -2123,27 +2117,11 @@ class JDETracker(object):
                 else:
                     print(f'attack ids: {attack_ids}\tattack frame {self.frame_id_}: FAIL\tl2 distance: {(noise ** 2).sum().sqrt().item() if noise is not None else None}\titeration: {attack_iter}')
 
-        # if noise is not None:
-        #     l2_dis = (noise ** 2).sum().sqrt().item()
-        #     im_blob = torch.clip(im_blob + noise, min=0, max=1)
-        #
-        #     noise = self.recoverNoise(noise, img0)
-        #     adImg = np.clip(img0 + noise, a_min=0, a_max=255)
-        #
-        #     noise = (noise - np.min(noise)) / (np.max(noise) - np.min(noise))
-        #     noise = (noise * 255).astype(np.uint8)
-        # else:
-        #     l2_dis = None
-        #     adImg = img0
-
         if noise is not None:
             l2_dis = (noise ** 2).sum().sqrt().item()
             adImg = torch.clip(im_blob + noise, min=0, max=1)
 
             noise = self.recoverNoise(noise, img0)
-            # adImg = np.clip(img0 + noise, a_min=0, a_max=255)
-
-            # noise = adImg - img0
             noise = (noise - np.min(noise)) / (np.max(noise) - np.min(noise))
             noise = (noise * 255).astype(np.uint8)
         else:
