@@ -504,9 +504,9 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
                     sg_track_outputs[key]['online_tlwhs_att'] = online_tlwhs_att
                     sg_track_outputs[key]['online_ids_att'] = online_ids_att
             else:
-                cv2.imwrite(imgPath, adImg)
-                if noise is not None:
-                    cv2.imwrite(noisePath, noise)
+                # cv2.imwrite(imgPath, adImg)
+                # if noise is not None:
+                #     cv2.imwrite(noisePath, noise)
 
                 online_tlwhs_att = []
                 online_ids_att = []
@@ -873,5 +873,5 @@ if __name__ == '__main__':
          seqs=seqs,
          exp_name='all_dla34',
          show_image=False,
-         save_images=True,
-         save_videos=True if opt.attack else True)
+         save_images=False,
+         save_videos=False)
