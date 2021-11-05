@@ -413,8 +413,8 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
                         raise RuntimeError()
                     sg_track_outputs[attack_id] = {}
                     sg_track_outputs[attack_id]['output_stracks_att'] = output_stracks_att
-                    sg_track_outputs[attack_id]['adImg'] = adImg
-                    sg_track_outputs[attack_id]['noise'] = noise
+                    # sg_track_outputs[attack_id]['adImg'] = adImg
+                    # sg_track_outputs[attack_id]['noise'] = noise
                     if suc in [1, 2] and noise is not None:
                         if attack_id not in sg_attack_frames:
                             sg_attack_frames[attack_id] = 0
