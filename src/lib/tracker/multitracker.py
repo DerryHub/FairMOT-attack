@@ -893,6 +893,7 @@ class JDETracker(object):
             # if hm_index_ is not None:
             #     hm_index = hm_index_
             if ae_attack_id != attack_id and ae_attack_id is not None:
+                break
                 if ae_attack_id == target_id and ae_target_id == attack_id:
                     break
                 elif ae_attack_id == target_id or ae_target_id == attack_id:
