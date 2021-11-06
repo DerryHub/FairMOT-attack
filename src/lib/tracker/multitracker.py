@@ -475,17 +475,11 @@ class JDETracker(object):
         im_blob_ori = im_blob.clone().data
         outputs = outputs_ori
         H, W = outputs_ori['hm'].size()[2:]
-        wh_ori = outputs['wh'].clone().data
-        reg_ori = outputs['reg'].clone().data
 
         hm_index = inds[0][remain_inds]
         hm_index_att = hm_index[attack_ind].item()
         index = list(range(hm_index.size(0)))
         index.pop(attack_ind)
-        hm_index_ori = hm_index[index]
-
-        adam_m = 0
-        adam_v = 0
 
         i = 0
         while True:
@@ -494,8 +488,6 @@ class JDETracker(object):
 
             loss -= mse(im_blob, im_blob_ori)
 
-            # loss += ((1 - outputs['hm'].view(-1)[hm_index_ori].sigmoid()) ** 2 *
-            #          torch.log(outputs['hm'].view(-1)[hm_index_ori].sigmoid())).mean()
             hm_index_att_lst = []
             for n_i in range(3):
                 for n_j in range(3):
@@ -505,9 +497,6 @@ class JDETracker(object):
 
             loss += ((outputs['hm'].view(-1)[hm_index_att_lst].sigmoid()) ** 2 *
                      torch.log(1 - outputs['hm'].view(-1)[hm_index_att_lst].sigmoid())).mean()
-
-            # loss -= smoothL1(outputs['wh'].view(2, -1)[:, hm_index_ori].T, wh_ori.view(2, -1)[:, hm_index_ori].T)
-            # loss -= smoothL1(outputs['reg'].view(2, -1)[:, hm_index_ori].T, reg_ori.view(2, -1)[:, hm_index_ori].T)
 
             loss.backward()
 
@@ -546,56 +535,15 @@ class JDETracker(object):
             target_id,
             target_ind
     ):
-        img0_h, img0_w = img0.shape[:2]
-        H, W = outputs_ori['hm'].size()[2:]
-        r_w, r_h = img0_w / W, img0_h / H
-        r_max = max(r_w, r_h)
         noise = torch.zeros_like(im_blob)
         im_blob_ori = im_blob.clone().data
-        outputs = outputs_ori
-        wh_ori = outputs['wh'].clone().data
-        reg_ori = outputs['reg'].clone().data
 
         last_ad_id_features = [None for _ in range(len(id_features[0]))]
-        strack_pool = copy.deepcopy(last_info['last_strack_pool'])
-        last_attack_det = None
-        last_target_det = None
-        STrack.multi_predict(strack_pool)
-        for strack in strack_pool:
-            if strack.track_id == attack_id:
-                last_ad_id_features[attack_ind] = strack.smooth_feat
-                last_attack_det = torch.from_numpy(strack.tlbr).cuda().float()
-                last_attack_det[[0, 2]] = (last_attack_det[[0, 2]] - 0.5 * W * (r_w - r_max)) / r_max
-                last_attack_det[[1, 3]] = (last_attack_det[[1, 3]] - 0.5 * H * (r_h - r_max)) / r_max
-            elif strack.track_id == target_id:
-                last_ad_id_features[target_ind] = strack.smooth_feat
-                last_target_det = torch.from_numpy(strack.tlbr).cuda().float()
-                last_target_det[[0, 2]] = (last_target_det[[0, 2]] - 0.5 * W * (r_w - r_max)) / r_max
-                last_target_det[[1, 3]] = (last_target_det[[1, 3]] - 0.5 * H * (r_h - r_max)) / r_max
-        last_attack_det_center = torch.round(
-            (last_attack_det[:2] + last_attack_det[2:]) / 2) if last_attack_det is not None else None
-        last_target_det_center = torch.round(
-            (last_target_det[:2] + last_target_det[2:]) / 2) if last_target_det is not None else None
-
-        hm_index = inds[0][remain_inds]
-        hm_index_ori = copy.deepcopy(hm_index)
-
         for i in range(len(id_features)):
             id_features[i] = id_features[i][[attack_ind, target_ind]]
 
-        adam_m = 0
-        adam_v = 0
-
         i = 0
-        j = -1
         suc = True
-        ori_hm_index = hm_index[[attack_ind, target_ind]].clone()
-        ori_hm_index_re = hm_index[[target_ind, attack_ind]].clone()
-        att_hm_index = None
-        noise_0 = None
-        i_0 = None
-        noise_1 = None
-        i_1 = None
         while True:
             i += 1
             loss = 0
@@ -637,28 +585,11 @@ class JDETracker(object):
             )
             if id_features_ is not None:
                 id_features = id_features_
-            if outputs_ is not None:
-                outputs = outputs_
-            # if hm_index_ is not None:
-            #     hm_index = hm_index_
-            if ae_attack_id != attack_id and ae_attack_id is not None:
-                if ae_attack_id == target_id and ae_target_id == attack_id:
-                    break
-                elif ae_attack_id == target_id or ae_target_id == attack_id:
-                    noise_0 = noise.clone()
-                    i_0 = i
-                else:
-                    noise_1 = noise.clone()
-                    i_1 = i
 
-            # if ae_attack_id == target_id and ae_target_id == attack_id:
-            #     break
+            if ae_attack_id != attack_id and ae_attack_id is not None:
+                break
 
             if i > 60:
-                if noise_0 is not None:
-                    return noise_0, i_0, suc
-                elif noise_1 is not None:
-                    return noise_1, i_1, suc
                 suc = False
                 break
         return noise, i, suc
@@ -2340,7 +2271,6 @@ class JDETracker(object):
         logger.debug('Lost: {}'.format([track.track_id for track in lost_stracks]))
         logger.debug('Removed: {}'.format([track.track_id for track in removed_stracks]))
 
-        attack = self.opt.attack
         noise = None
         suc = 0
         if self.attack_sg:
@@ -2407,9 +2337,6 @@ class JDETracker(object):
             adImg = torch.clip(im_blob + noise, min=0, max=1)
 
             noise = self.recoverNoise(noise, img0)
-            # adImg = np.clip(img0 + noise, a_min=0, a_max=255)
-
-            # noise = adImg - img0
             noise = (noise - np.min(noise)) / (np.max(noise) - np.min(noise))
             noise = (noise * 255).astype(np.uint8)
         else:
