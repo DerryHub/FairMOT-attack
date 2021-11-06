@@ -895,14 +895,6 @@ class JDETracker(object):
             #     hm_index = hm_index_
             if ae_attack_id != attack_id and ae_attack_id is not None:
                 break
-                if ae_attack_id == target_id and ae_target_id == attack_id:
-                    break
-                elif ae_attack_id == target_id or ae_target_id == attack_id:
-                    noise_0 = noise.clone()
-                    i_0 = i
-                else:
-                    noise_1 = noise.clone()
-                    i_1 = i
 
             if i > 60:
                 if noise_0 is not None:
@@ -1000,16 +992,16 @@ class JDETracker(object):
                         last_ad_id_feature = torch.from_numpy(last_ad_id_features[attack_ind]).unsqueeze(0).cuda()
                         sim_1 = torch.mm(id_feature[attack_ind:attack_ind + 1], last_ad_id_feature.T).squeeze()
                         sim_2 = torch.mm(id_feature[target_ind:target_ind + 1], last_ad_id_feature.T).squeeze()
-                        if not self.opt.no_hard_sample:
-                            loss_feat += torch.clamp(sim_2 - sim_1, max=0.2)
+                        if self.opt.hard_sample > 0:
+                            loss_feat += torch.clamp(sim_2 - sim_1, max=self.opt.hard_sample)
                         else:
                             loss_feat += sim_2 - sim_1
                     if last_ad_id_features[target_ind] is not None:
                         last_ad_id_feature = torch.from_numpy(last_ad_id_features[target_ind]).unsqueeze(0).cuda()
                         sim_1 = torch.mm(id_feature[target_ind:target_ind + 1], last_ad_id_feature.T).squeeze()
                         sim_2 = torch.mm(id_feature[attack_ind:attack_ind + 1], last_ad_id_feature.T).squeeze()
-                        if not self.opt.no_hard_sample:
-                            loss_feat += torch.clamp(sim_2 - sim_1, max=0.2)
+                        if self.opt.hard_sample > 0:
+                            loss_feat += torch.clamp(sim_2 - sim_1, max=self.opt.hard_sample)
                         else:
                             loss_feat += sim_2 - sim_1
                     if last_ad_id_features[attack_ind] is None and last_ad_id_features[target_ind] is None:

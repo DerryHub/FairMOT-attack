@@ -23,7 +23,7 @@ class opts(object):
     self.parser.add_argument('--attack_id', default=-1, type=int)
     self.parser.add_argument('--method', default='ids', type=str)
     self.parser.add_argument('--iou_thr', default=0.2, type=float)
-    self.parser.add_argument('--no_hard_sample', action='store_true')
+    self.parser.add_argument('--hard_sample', default=0.3, type=float)
     self.parser.add_argument('--no_f_noise', action='store_true')
     self.parser.add_argument('--rand', action='store_true')
     #self.parser.add_argument('--load_model', default='../models/ctdet_coco_dla_2x.pth',
