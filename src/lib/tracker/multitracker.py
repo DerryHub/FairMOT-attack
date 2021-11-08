@@ -615,7 +615,7 @@ class JDETracker(object):
 
         noise = torch.rand(im_blob_ori.size()).to(im_blob_ori.device)
         noise /= (noise**2).sum().sqrt()
-        noise *= random.uniform(2,8)
+        noise *= random.uniform(2, 8)
 
         im_blob = torch.clip(im_blob_ori + noise, min=0, max=1).data
         id_features_, outputs_, ae_attack_id, ae_target_id, hm_index_ = self.forwardFeatureSg(
