@@ -342,7 +342,7 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
         blob = torch.from_numpy(img).cuda().unsqueeze(0)
 
         if opt.attack:
-            if opt.attack == 'single' and opt.attack_id == -1 and opt.method in ['ids', 'det', 'feat']:
+            if opt.attack == 'single' and opt.attack_id == -1 and opt.method in ['ids', 'det', 'feat', 'cl']:
                 online_targets_ori = tracker.update(blob, img0, name=path.replace(root_r, ''), track_id=track_id)
                 dets = []
                 ids = []
@@ -403,6 +403,14 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
                         )
                     elif opt.method == 'det':
                         _, output_stracks_att, adImg, noise, l2_dis, suc = trackers_dic[attack_id].update_attack_sg_det(
+                            blob,
+                            img0,
+                            name=path.replace(root_r, ''),
+                            attack_id=attack_id,
+                            track_id=sg_track_ids[attack_id]
+                        )
+                    elif opt.method == 'cl':
+                        _, output_stracks_att, adImg, noise, l2_dis, suc = trackers_dic[attack_id].update_attack_sg_cl(
                             blob,
                             img0,
                             name=path.replace(root_r, ''),
