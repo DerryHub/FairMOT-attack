@@ -421,8 +421,8 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
                         raise RuntimeError()
                     sg_track_outputs[attack_id] = {}
                     sg_track_outputs[attack_id]['output_stracks_att'] = output_stracks_att
-                    # sg_track_outputs[attack_id]['adImg'] = adImg
-                    # sg_track_outputs[attack_id]['noise'] = noise
+                    sg_track_outputs[attack_id]['adImg'] = adImg
+                    sg_track_outputs[attack_id]['noise'] = noise
                     if suc in [1, 2] and noise is not None:
                         if attack_id not in sg_attack_frames:
                             sg_attack_frames[attack_id] = 0
@@ -502,9 +502,9 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
 
             if opt.attack == 'single' and opt.attack_id == -1:
                 for key in sg_track_outputs.keys():
-                    # cv2.imwrite(imgPath.replace('.jpg', f'_{key}.jpg'), sg_track_outputs[key]['adImg'])
-                    # if sg_track_outputs[key]['noise'] is not None:
-                    #     cv2.imwrite(noisePath.replace('.jpg', f'_{key}.jpg'), sg_track_outputs[key]['noise'])
+                    cv2.imwrite(imgPath.replace('.jpg', f'_{key}.jpg'), sg_track_outputs[key]['adImg'])
+                    if sg_track_outputs[key]['noise'] is not None:
+                        cv2.imwrite(noisePath.replace('.jpg', f'_{key}.jpg'), sg_track_outputs[key]['noise'])
                     online_tlwhs_att = []
                     online_ids_att = []
                     for t in sg_track_outputs[key]['output_stracks_att']:
@@ -519,9 +519,9 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
                     sg_track_outputs[key]['online_tlwhs_att'] = online_tlwhs_att
                     sg_track_outputs[key]['online_ids_att'] = online_ids_att
             else:
-                # cv2.imwrite(imgPath, adImg)
-                # if noise is not None:
-                #     cv2.imwrite(noisePath, noise)
+                cv2.imwrite(imgPath, adImg)
+                if noise is not None:
+                    cv2.imwrite(noisePath, noise)
 
                 online_tlwhs_att = []
                 online_ids_att = []
@@ -777,31 +777,12 @@ if __name__ == '__main__':
         opt.output_dir = os.path.join(opt.output_dir, f'{opt.attack}_{opt.attack_id}_{opt.method}')
     elif opt.attack == 'multiple':
         opt.output_dir = os.path.join(opt.output_dir, f'{opt.attack}_{opt.method}')
-    elif opt.attack == 'multiple_z':
-        opt.output_dir = os.path.join(opt.output_dir, opt.attack)
     elif not opt.attack:
         opt.output_dir = os.path.join(opt.output_dir, 'origin')
     else:
         raise RuntimeError()
 
-    if not opt.val_mot16:
-        seqs_str = '''
-                      KITTI-13
-                      KITTI-17
-                      ADL-Rundle-6
-                      PETS09-S2L1
-                      TUD-Campus
-                      TUD-Stadtmitte'''
-        data_root = os.path.join(opt.data_dir, 'MOT15/images/train')
-    else:
-        seqs_str = '''MOT16-02
-                      MOT16-04
-                      MOT16-05
-                      MOT16-09
-                      MOT16-10
-                      MOT16-11
-                      MOT16-13'''
-        data_root = os.path.join(opt.data_dir, 'MOT16/train')
+
     if opt.test_mot16:
         seqs_str = '''MOT16-01
                       MOT16-03
@@ -811,7 +792,7 @@ if __name__ == '__main__':
                       MOT16-12
                       MOT16-14'''
         data_root = os.path.join(opt.data_dir, 'MOT16/test')
-    if opt.test_mot15:
+    elif opt.test_mot15:
         seqs_str = '''ADL-Rundle-1
                       ADL-Rundle-3
                       AVG-TownCentre
@@ -824,7 +805,7 @@ if __name__ == '__main__':
                       TUD-Crossing
                       Venice-1'''
         data_root = os.path.join(opt.data_dir, 'MOT15/images/test')
-    if opt.test_mot17:
+    elif opt.test_mot17:
         seqs_str = '''MOT17-01-SDP
                       MOT17-03-SDP
                       MOT17-06-SDP
@@ -832,26 +813,19 @@ if __name__ == '__main__':
                       MOT17-08-SDP
                       MOT17-12-SDP
                       MOT17-14-SDP'''
-        # seqs_str = '''MOT17-01-SDP
-        #               MOT17-03-SDP
-        #               MOT17-06-SDP'''
-        # seqs_str = '''MOT17-07-SDP
-        #               MOT17-08-SDP
-        #               MOT17-12-SDP
-        #               MOT17-14-SDP'''
-        # seqs_str = '''MOT17-14-SDP'''
+        # seqs_str = '''MOT17-03-SDP'''
         data_root = os.path.join(opt.data_dir, 'MOT17/images/test')
-    if opt.val_mot17:
-        # seqs_str = '''MOT17-02-SDP
-        #               MOT17-04-SDP
-        #               MOT17-05-SDP
-        #               MOT17-09-SDP
-        #               MOT17-10-SDP
-        #               MOT17-11-SDP
-        #               MOT17-13-SDP'''
-        seqs_str = '''MOT17-05-SDP'''
+    elif opt.val_mot17:
+        seqs_str = '''MOT17-02-SDP
+                      MOT17-04-SDP
+                      MOT17-05-SDP
+                      MOT17-09-SDP
+                      MOT17-10-SDP
+                      MOT17-11-SDP
+                      MOT17-13-SDP'''
+        # seqs_str = '''MOT17-05-SDP'''
         data_root = os.path.join(opt.data_dir, 'MOT17/images/train')
-    if opt.val_mot15:
+    elif opt.val_mot15:
         seqs_str = '''Venice-2
                       KITTI-13
                       KITTI-17
@@ -865,22 +839,24 @@ if __name__ == '__main__':
                       ETH-Pedcross2
                       TUD-Stadtmitte'''
 
-        seqs_str = '''Venice-2'''
+        # seqs_str = '''PETS09-S2L1'''
         data_root = os.path.join(opt.data_dir, 'MOT15/images/train')
-    if opt.val_mot20:
+    elif opt.val_mot20:
         seqs_str = '''MOT20-01
                       MOT20-02
                       MOT20-03
                       MOT20-05
                       '''
         data_root = os.path.join(opt.data_dir, 'MOT20/images/train')
-    if opt.test_mot20:
+    elif opt.test_mot20:
         seqs_str = '''MOT20-04
                       MOT20-06
                       MOT20-07
                       MOT20-08
                       '''
         data_root = os.path.join(opt.data_dir, 'MOT20/images/test')
+    else:
+        raise RuntimeError()
     seqs = [seq.strip() for seq in seqs_str.split()]
 
     main(opt,
@@ -888,5 +864,5 @@ if __name__ == '__main__':
          seqs=seqs,
          exp_name='all_dla34',
          show_image=False,
-         save_images=False,
+         save_images=True,
          save_videos=False)
