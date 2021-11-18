@@ -9,8 +9,8 @@
     </tr>
 </table>
 
-> [**TraSw: Tracklet-Switch Adversarial Attacks against Multi-Object Tracking**](https://arxiv.org/abs/2111.08954),
-> Delv Lin, Qi Chen, Chengyu Zhou, Kun He,
+> [**TraSw: Tracklet-Switch Adversarial Attacks against Multi-Object Tracking**](https://arxiv.org/abs/2111.08954),            
+> Delv Lin, Qi Chen, Chengyu Zhou, Kun He,              
 > *[arXiv 2111.08954](https://arxiv.org/abs/2111.08954)*
 
 ## Abstract
