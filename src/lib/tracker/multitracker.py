@@ -459,7 +459,7 @@ class JDETracker(object):
                 indSet.add(j)
         return ious
 
-    def ifgsm_adam_sg_det(
+    def attack_sg_det(
             self,
             im_blob,
             img0,
@@ -520,7 +520,7 @@ class JDETracker(object):
 
         return noise, i, suc
 
-    def ifgsm_adam_sg_feat(
+    def attack_sg_feat(
             self,
             im_blob,
             img0,
@@ -594,7 +594,7 @@ class JDETracker(object):
                 break
         return noise, i, suc
 
-    def ifgsm_adam_sg_cl(
+    def attack_sg_cl(
             self,
             im_blob,
             img0,
@@ -754,7 +754,7 @@ class JDETracker(object):
                     break
         return noise, i, suc
 
-    def ifgsm_adam_sg_random(
+    def attack_sg_random(
             self,
             im_blob,
             img0,
@@ -797,7 +797,7 @@ class JDETracker(object):
 
         return noise, 1, suc
 
-    def ifgsm_adam_mt_random(
+    def attack_mt_random(
             self,
             im_blob,
             img0,
@@ -839,7 +839,7 @@ class JDETracker(object):
 
         return noise, 1, suc
 
-    def ifgsm_adam_sg(
+    def attack_sg(
             self,
             im_blob,
             img0,
@@ -999,7 +999,7 @@ class JDETracker(object):
                     break
         return noise, i, suc
 
-    def ifgsm_adam_mt(
+    def attack_mt(
             self,
             im_blob,
             img0,
@@ -1839,7 +1839,7 @@ class JDETracker(object):
                         target_id = dets_ids[target_ind]
                         if fit:
                             if self.opt.rand:
-                                noise, attack_iter, suc = self.ifgsm_adam_sg_random(
+                                noise, attack_iter, suc = self.attack_sg_random(
                                     im_blob,
                                     img0,
                                     id_features,
@@ -1854,7 +1854,7 @@ class JDETracker(object):
                                     target_ind=target_ind
                                 )
                             else:
-                                noise, attack_iter, suc = self.ifgsm_adam_sg(
+                                noise, attack_iter, suc = self.attack_sg(
                                     im_blob,
                                     img0,
                                     id_features,
@@ -2163,7 +2163,7 @@ class JDETracker(object):
                 target_inds = np.array(target_inds)[fit_index]
 
                 if self.opt.rand:
-                    noise, attack_iter, suc = self.ifgsm_adam_mt_random(
+                    noise, attack_iter, suc = self.attack_mt_random(
                         im_blob,
                         img0,
                         id_features,
@@ -2178,7 +2178,7 @@ class JDETracker(object):
                         target_inds=target_inds
                     )
                 else:
-                    noise, attack_iter, suc = self.ifgsm_adam_mt(
+                    noise, attack_iter, suc = self.attack_mt(
                         im_blob,
                         img0,
                         id_features,
@@ -2456,7 +2456,7 @@ class JDETracker(object):
                             target_ind = np.argmin(dis[attack_ind])
                         target_id = dets_ids[target_ind]
                         if fit:
-                            noise, attack_iter, suc = self.ifgsm_adam_sg_feat(
+                            noise, attack_iter, suc = self.attack_sg_feat(
                                 im_blob,
                                 img0,
                                 id_features,
@@ -2728,7 +2728,7 @@ class JDETracker(object):
                             target_ind = np.argmin(dis[attack_ind])
                         target_id = dets_ids[target_ind]
                         if fit:
-                            noise, attack_iter, suc = self.ifgsm_adam_sg_cl(
+                            noise, attack_iter, suc = self.attack_sg_cl(
                                 im_blob,
                                 img0,
                                 id_features,
@@ -2998,7 +2998,7 @@ class JDETracker(object):
                     if ious[attack_ind][target_ind] >= self.attack_iou_thr:
                         fit = self.CheckFit(dets, id_feature, [attack_id], [attack_ind])
                         if fit:
-                            noise, attack_iter, suc = self.ifgsm_adam_sg_det(
+                            noise, attack_iter, suc = self.attack_sg_det(
                                 im_blob,
                                 img0,
                                 dets,
