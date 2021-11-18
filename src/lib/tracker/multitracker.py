@@ -347,8 +347,6 @@ class JDETracker(object):
         self.kalman_filter_ad = KalmanFilter()
         self.kalman_filter_ = KalmanFilter()
 
-        self.attack_sg = True
-        self.attack_mt = True
         self.attacked_ids = set([])
         self.low_iou_ids = set([])
         self.ATTACK_IOU_THR = opt.iou_thr
@@ -1812,83 +1810,81 @@ class JDETracker(object):
         logger.debug('Lost: {}'.format([track.track_id for track in lost_stracks]))
         logger.debug('Removed: {}'.format([track.track_id for track in removed_stracks]))
 
-        attack = self.opt.attack
         noise = None
         suc = 0
-        if self.attack_sg:
-            for attack_ind, track_id in enumerate(dets_ids):
-                if track_id == attack_id:
-                    if self.opt.attack_id > 0:
-                        if not hasattr(self, f'frames_{attack_id}'):
-                            setattr(self, f'frames_{attack_id}', 0)
-                        if getattr(self, f'frames_{attack_id}') < self.FRAME_THR:
-                            setattr(self, f'frames_{attack_id}', getattr(self, f'frames_{attack_id}') + 1)
-                            break
-                    fit = self.CheckFit(dets, id_feature, [attack_id], [attack_ind])
-                    ious = bbox_ious(np.ascontiguousarray(dets[:, :4], dtype=np.float64),
-                                     np.ascontiguousarray(dets[:, :4], dtype=np.float64))
+        for attack_ind, track_id in enumerate(dets_ids):
+            if track_id == attack_id:
+                if self.opt.attack_id > 0:
+                    if not hasattr(self, f'frames_{attack_id}'):
+                        setattr(self, f'frames_{attack_id}', 0)
+                    if getattr(self, f'frames_{attack_id}') < self.FRAME_THR:
+                        setattr(self, f'frames_{attack_id}', getattr(self, f'frames_{attack_id}') + 1)
+                        break
+                fit = self.CheckFit(dets, id_feature, [attack_id], [attack_ind])
+                ious = bbox_ious(np.ascontiguousarray(dets[:, :4], dtype=np.float64),
+                                 np.ascontiguousarray(dets[:, :4], dtype=np.float64))
 
-                    ious[range(len(dets)), range(len(dets))] = 0
-                    dis = bbox_dis(np.ascontiguousarray(dets[:, :4], dtype=np.float64),
-                                   np.ascontiguousarray(dets[:, :4], dtype=np.float64))
-                    dis[range(len(dets)), range(len(dets))] = np.inf
-                    target_ind = np.argmax(ious[attack_ind])
-                    if ious[attack_ind][target_ind] >= self.attack_iou_thr:
-                        if ious[attack_ind][target_ind] == 0:
-                            target_ind = np.argmin(dis[attack_ind])
-                        target_id = dets_ids[target_ind]
-                        if fit:
-                            if self.opt.rand:
-                                noise, attack_iter, suc = self.attack_sg_random(
-                                    im_blob,
-                                    img0,
-                                    id_features,
-                                    dets,
-                                    inds,
-                                    remain_inds,
-                                    last_info=self.ad_last_info,
-                                    outputs_ori=output,
-                                    attack_id=attack_id,
-                                    attack_ind=attack_ind,
-                                    target_id=target_id,
-                                    target_ind=target_ind
-                                )
-                            else:
-                                noise, attack_iter, suc = self.attack_sg(
-                                    im_blob,
-                                    img0,
-                                    id_features,
-                                    dets,
-                                    inds,
-                                    remain_inds,
-                                    last_info=self.ad_last_info,
-                                    outputs_ori=output,
-                                    attack_id=attack_id,
-                                    attack_ind=attack_ind,
-                                    target_id=target_id,
-                                    target_ind=target_ind
-                                )
-                            self.attack_iou_thr = 0
-                            if suc:
-                                suc = 1
-                                print(
-                                    f'attack id: {attack_id}\tattack frame {self.frame_id_}: SUCCESS\tl2 distance: {(noise ** 2).sum().sqrt().item()}\titeration: {attack_iter}')
-                            else:
-                                suc = 2
-                                print(
-                                    f'attack id: {attack_id}\tattack frame {self.frame_id_}: FAIL\tl2 distance: {(noise ** 2).sum().sqrt().item() if noise is not None else None}\titeration: {attack_iter}')
+                ious[range(len(dets)), range(len(dets))] = 0
+                dis = bbox_dis(np.ascontiguousarray(dets[:, :4], dtype=np.float64),
+                               np.ascontiguousarray(dets[:, :4], dtype=np.float64))
+                dis[range(len(dets)), range(len(dets))] = np.inf
+                target_ind = np.argmax(ious[attack_ind])
+                if ious[attack_ind][target_ind] >= self.attack_iou_thr:
+                    if ious[attack_ind][target_ind] == 0:
+                        target_ind = np.argmin(dis[attack_ind])
+                    target_id = dets_ids[target_ind]
+                    if fit:
+                        if self.opt.rand:
+                            noise, attack_iter, suc = self.attack_sg_random(
+                                im_blob,
+                                img0,
+                                id_features,
+                                dets,
+                                inds,
+                                remain_inds,
+                                last_info=self.ad_last_info,
+                                outputs_ori=output,
+                                attack_id=attack_id,
+                                attack_ind=attack_ind,
+                                target_id=target_id,
+                                target_ind=target_ind
+                            )
                         else:
-                            suc = 3
-                        if ious[attack_ind][target_ind] == 0:
-                            self.temp_i += 1
-                            if self.temp_i >= 10:
-                                self.attack_iou_thr = self.ATTACK_IOU_THR
+                            noise, attack_iter, suc = self.attack_sg(
+                                im_blob,
+                                img0,
+                                id_features,
+                                dets,
+                                inds,
+                                remain_inds,
+                                last_info=self.ad_last_info,
+                                outputs_ori=output,
+                                attack_id=attack_id,
+                                attack_ind=attack_ind,
+                                target_id=target_id,
+                                target_ind=target_ind
+                            )
+                        self.attack_iou_thr = 0
+                        if suc:
+                            suc = 1
+                            print(
+                                f'attack id: {attack_id}\tattack frame {self.frame_id_}: SUCCESS\tl2 distance: {(noise ** 2).sum().sqrt().item()}\titeration: {attack_iter}')
                         else:
-                            self.temp_i = 0
-                    else:
-                        self.attack_iou_thr = self.ATTACK_IOU_THR
-                        if fit:
                             suc = 2
+                            print(
+                                f'attack id: {attack_id}\tattack frame {self.frame_id_}: FAIL\tl2 distance: {(noise ** 2).sum().sqrt().item() if noise is not None else None}\titeration: {attack_iter}')
+                    else:
+                        suc = 3
+                    if ious[attack_ind][target_ind] == 0:
+                        self.temp_i += 1
+                        if self.temp_i >= 10:
+                            self.attack_iou_thr = self.ATTACK_IOU_THR
+                    else:
+                        self.temp_i = 0
+                else:
+                    self.attack_iou_thr = self.ATTACK_IOU_THR
+                    if fit:
+                        suc = 2
 
         if noise is not None:
             l2_dis = (noise ** 2).sum().sqrt().item()
@@ -2118,9 +2114,8 @@ class JDETracker(object):
         attack_inds = []
         target_inds = []
 
-        attack = self.opt.attack
         noise = None
-        if self.attack_mt and len(dets) > 0:
+        if len(dets) > 0:
             ious = bbox_ious(np.ascontiguousarray(dets[:, :4], dtype=np.float64),
                              np.ascontiguousarray(dets[:, :4], dtype=np.float64))
             ious[range(len(dets)), range(len(dets))] = 0
@@ -2433,64 +2428,63 @@ class JDETracker(object):
 
         noise = None
         suc = 0
-        if self.attack_sg:
-            for attack_ind, track_id in enumerate(dets_ids):
-                if track_id == attack_id:
-                    if self.opt.attack_id > 0:
-                        if not hasattr(self, f'frames_{attack_id}'):
-                            setattr(self, f'frames_{attack_id}', 0)
-                        if getattr(self, f'frames_{attack_id}') < self.FRAME_THR:
-                            setattr(self, f'frames_{attack_id}', getattr(self, f'frames_{attack_id}') + 1)
-                            break
-                    fit = self.CheckFit(dets, id_feature, [attack_id], [attack_ind])
-                    ious = bbox_ious(np.ascontiguousarray(dets[:, :4], dtype=np.float64),
-                                     np.ascontiguousarray(dets[:, :4], dtype=np.float64))
+        for attack_ind, track_id in enumerate(dets_ids):
+            if track_id == attack_id:
+                if self.opt.attack_id > 0:
+                    if not hasattr(self, f'frames_{attack_id}'):
+                        setattr(self, f'frames_{attack_id}', 0)
+                    if getattr(self, f'frames_{attack_id}') < self.FRAME_THR:
+                        setattr(self, f'frames_{attack_id}', getattr(self, f'frames_{attack_id}') + 1)
+                        break
+                fit = self.CheckFit(dets, id_feature, [attack_id], [attack_ind])
+                ious = bbox_ious(np.ascontiguousarray(dets[:, :4], dtype=np.float64),
+                                 np.ascontiguousarray(dets[:, :4], dtype=np.float64))
 
-                    ious[range(len(dets)), range(len(dets))] = 0
-                    dis = bbox_dis(np.ascontiguousarray(dets[:, :4], dtype=np.float64),
-                                   np.ascontiguousarray(dets[:, :4], dtype=np.float64))
-                    dis[range(len(dets)), range(len(dets))] = np.inf
-                    target_ind = np.argmax(ious[attack_ind])
-                    if ious[attack_ind][target_ind] >= self.attack_iou_thr:
-                        if ious[attack_ind][target_ind] == 0:
-                            target_ind = np.argmin(dis[attack_ind])
-                        target_id = dets_ids[target_ind]
-                        if fit:
-                            noise, attack_iter, suc = self.attack_sg_feat(
-                                im_blob,
-                                img0,
-                                id_features,
-                                dets,
-                                inds,
-                                remain_inds,
-                                last_info=self.ad_last_info,
-                                outputs_ori=output,
-                                attack_id=attack_id,
-                                attack_ind=attack_ind,
-                                target_id=target_id,
-                                target_ind=target_ind
-                            )
-                            self.attack_iou_thr = 0
-                            if suc:
-                                suc = 1
-                                print(
-                                    f'attack id: {attack_id}\tattack frame {self.frame_id_}: SUCCESS\tl2 distance: {(noise ** 2).sum().sqrt().item()}\titeration: {attack_iter}')
-                            else:
-                                suc = 2
-                                print(
-                                    f'attack id: {attack_id}\tattack frame {self.frame_id_}: FAIL\tl2 distance: {(noise ** 2).sum().sqrt().item()}\titeration: {attack_iter}')
+                ious[range(len(dets)), range(len(dets))] = 0
+                dis = bbox_dis(np.ascontiguousarray(dets[:, :4], dtype=np.float64),
+                               np.ascontiguousarray(dets[:, :4], dtype=np.float64))
+                dis[range(len(dets)), range(len(dets))] = np.inf
+                target_ind = np.argmax(ious[attack_ind])
+                if ious[attack_ind][target_ind] >= self.attack_iou_thr:
+                    if ious[attack_ind][target_ind] == 0:
+                        target_ind = np.argmin(dis[attack_ind])
+                    target_id = dets_ids[target_ind]
+                    if fit:
+                        noise, attack_iter, suc = self.attack_sg_feat(
+                            im_blob,
+                            img0,
+                            id_features,
+                            dets,
+                            inds,
+                            remain_inds,
+                            last_info=self.ad_last_info,
+                            outputs_ori=output,
+                            attack_id=attack_id,
+                            attack_ind=attack_ind,
+                            target_id=target_id,
+                            target_ind=target_ind
+                        )
+                        self.attack_iou_thr = 0
+                        if suc:
+                            suc = 1
+                            print(
+                                f'attack id: {attack_id}\tattack frame {self.frame_id_}: SUCCESS\tl2 distance: {(noise ** 2).sum().sqrt().item()}\titeration: {attack_iter}')
                         else:
-                            suc = 3
-                        if ious[attack_ind][target_ind] == 0:
-                            self.temp_i += 1
-                            if self.temp_i >= 10:
-                                self.attack_iou_thr = self.ATTACK_IOU_THR
-                        else:
-                            self.temp_i = 0
-                    else:
-                        self.attack_iou_thr = self.ATTACK_IOU_THR
-                        if fit:
                             suc = 2
+                            print(
+                                f'attack id: {attack_id}\tattack frame {self.frame_id_}: FAIL\tl2 distance: {(noise ** 2).sum().sqrt().item()}\titeration: {attack_iter}')
+                    else:
+                        suc = 3
+                    if ious[attack_ind][target_ind] == 0:
+                        self.temp_i += 1
+                        if self.temp_i >= 10:
+                            self.attack_iou_thr = self.ATTACK_IOU_THR
+                    else:
+                        self.temp_i = 0
+                else:
+                    self.attack_iou_thr = self.ATTACK_IOU_THR
+                    if fit:
+                        suc = 2
 
         if noise is not None:
             l2_dis = (noise ** 2).sum().sqrt().item()
@@ -2702,67 +2696,65 @@ class JDETracker(object):
         logger.debug('Lost: {}'.format([track.track_id for track in lost_stracks]))
         logger.debug('Removed: {}'.format([track.track_id for track in removed_stracks]))
 
-        attack = self.opt.attack
         noise = None
         suc = 0
-        if self.attack_sg:
-            for attack_ind, track_id in enumerate(dets_ids):
-                if track_id == attack_id:
-                    if self.opt.attack_id > 0:
-                        if not hasattr(self, f'frames_{attack_id}'):
-                            setattr(self, f'frames_{attack_id}', 0)
-                        if getattr(self, f'frames_{attack_id}') < self.FRAME_THR:
-                            setattr(self, f'frames_{attack_id}', getattr(self, f'frames_{attack_id}') + 1)
-                            break
-                    fit = self.CheckFit(dets, id_feature, [attack_id], [attack_ind])
-                    ious = bbox_ious(np.ascontiguousarray(dets[:, :4], dtype=np.float64),
-                                     np.ascontiguousarray(dets[:, :4], dtype=np.float64))
+        for attack_ind, track_id in enumerate(dets_ids):
+            if track_id == attack_id:
+                if self.opt.attack_id > 0:
+                    if not hasattr(self, f'frames_{attack_id}'):
+                        setattr(self, f'frames_{attack_id}', 0)
+                    if getattr(self, f'frames_{attack_id}') < self.FRAME_THR:
+                        setattr(self, f'frames_{attack_id}', getattr(self, f'frames_{attack_id}') + 1)
+                        break
+                fit = self.CheckFit(dets, id_feature, [attack_id], [attack_ind])
+                ious = bbox_ious(np.ascontiguousarray(dets[:, :4], dtype=np.float64),
+                                 np.ascontiguousarray(dets[:, :4], dtype=np.float64))
 
-                    ious[range(len(dets)), range(len(dets))] = 0
-                    dis = bbox_dis(np.ascontiguousarray(dets[:, :4], dtype=np.float64),
-                                   np.ascontiguousarray(dets[:, :4], dtype=np.float64))
-                    dis[range(len(dets)), range(len(dets))] = np.inf
-                    target_ind = np.argmax(ious[attack_ind])
-                    if ious[attack_ind][target_ind] >= self.attack_iou_thr:
-                        if ious[attack_ind][target_ind] == 0:
-                            target_ind = np.argmin(dis[attack_ind])
-                        target_id = dets_ids[target_ind]
-                        if fit:
-                            noise, attack_iter, suc = self.attack_sg_cl(
-                                im_blob,
-                                img0,
-                                id_features,
-                                dets,
-                                inds,
-                                remain_inds,
-                                last_info=self.ad_last_info,
-                                outputs_ori=output,
-                                attack_id=attack_id,
-                                attack_ind=attack_ind,
-                                target_id=target_id,
-                                target_ind=target_ind
-                            )
-                            self.attack_iou_thr = 0
-                            if suc:
-                                suc = 1
-                                print(
-                                    f'attack id: {attack_id}\tattack frame {self.frame_id_}: SUCCESS\tl2 distance: {(noise ** 2).sum().sqrt().item()}\titeration: {attack_iter}')
-                            else:
-                                suc = 2
-                                print(
-                                    f'attack id: {attack_id}\tattack frame {self.frame_id_}: FAIL\tl2 distance: {(noise ** 2).sum().sqrt().item() if noise is not None else None}\titeration: {attack_iter}')
+                ious[range(len(dets)), range(len(dets))] = 0
+                dis = bbox_dis(np.ascontiguousarray(dets[:, :4], dtype=np.float64),
+                               np.ascontiguousarray(dets[:, :4], dtype=np.float64))
+                dis[range(len(dets)), range(len(dets))] = np.inf
+                target_ind = np.argmax(ious[attack_ind])
+                if ious[attack_ind][target_ind] >= self.attack_iou_thr:
+                    if ious[attack_ind][target_ind] == 0:
+                        target_ind = np.argmin(dis[attack_ind])
+                    target_id = dets_ids[target_ind]
+                    if fit:
+                        noise, attack_iter, suc = self.attack_sg_cl(
+                            im_blob,
+                            img0,
+                            id_features,
+                            dets,
+                            inds,
+                            remain_inds,
+                            last_info=self.ad_last_info,
+                            outputs_ori=output,
+                            attack_id=attack_id,
+                            attack_ind=attack_ind,
+                            target_id=target_id,
+                            target_ind=target_ind
+                        )
+                        self.attack_iou_thr = 0
+                        if suc:
+                            suc = 1
+                            print(
+                                f'attack id: {attack_id}\tattack frame {self.frame_id_}: SUCCESS\tl2 distance: {(noise ** 2).sum().sqrt().item()}\titeration: {attack_iter}')
                         else:
-                            suc = 3
-                        if ious[attack_ind][target_ind] == 0:
-                            self.temp_i += 1
-                            if self.temp_i >= 10:
-                                self.attack_iou_thr = self.ATTACK_IOU_THR
-                        else:
-                            self.temp_i = 0
-                    else:
-                        self.attack_iou_thr = self.ATTACK_IOU_THR
-                        if fit:
                             suc = 2
+                            print(
+                                f'attack id: {attack_id}\tattack frame {self.frame_id_}: FAIL\tl2 distance: {(noise ** 2).sum().sqrt().item() if noise is not None else None}\titeration: {attack_iter}')
+                    else:
+                        suc = 3
+                    if ious[attack_ind][target_ind] == 0:
+                        self.temp_i += 1
+                        if self.temp_i >= 10:
+                            self.attack_iou_thr = self.ATTACK_IOU_THR
+                    else:
+                        self.temp_i = 0
+                else:
+                    self.attack_iou_thr = self.ATTACK_IOU_THR
+                    if fit:
+                        suc = 2
 
         if noise is not None:
             l2_dis = (noise ** 2).sum().sqrt().item()
@@ -2977,58 +2969,56 @@ class JDETracker(object):
         logger.debug('Lost: {}'.format([track.track_id for track in lost_stracks]))
         logger.debug('Removed: {}'.format([track.track_id for track in removed_stracks]))
 
-        attack = self.opt.attack
         noise = None
         suc = 0
-        if self.attack_sg:
-            for attack_ind, track_id in enumerate(dets_ids):
-                if track_id == attack_id:
-                    if self.opt.attack_id > 0:
-                        if not hasattr(self, f'frames_{attack_id}'):
-                            setattr(self, f'frames_{attack_id}', 0)
-                        if getattr(self, f'frames_{attack_id}') < self.FRAME_THR:
-                            setattr(self, f'frames_{attack_id}', getattr(self, f'frames_{attack_id}') + 1)
-                            break
-                    ious = bbox_ious(np.ascontiguousarray(dets[:, :4], dtype=np.float64),
-                                     np.ascontiguousarray(dets[:, :4], dtype=np.float64))
+        for attack_ind, track_id in enumerate(dets_ids):
+            if track_id == attack_id:
+                if self.opt.attack_id > 0:
+                    if not hasattr(self, f'frames_{attack_id}'):
+                        setattr(self, f'frames_{attack_id}', 0)
+                    if getattr(self, f'frames_{attack_id}') < self.FRAME_THR:
+                        setattr(self, f'frames_{attack_id}', getattr(self, f'frames_{attack_id}') + 1)
+                        break
+                ious = bbox_ious(np.ascontiguousarray(dets[:, :4], dtype=np.float64),
+                                 np.ascontiguousarray(dets[:, :4], dtype=np.float64))
 
-                    ious = self.processIoUs(ious)
-                    ious = ious + ious.T
-                    target_ind = np.argmax(ious[attack_ind])
-                    if ious[attack_ind][target_ind] >= self.attack_iou_thr:
-                        fit = self.CheckFit(dets, id_feature, [attack_id], [attack_ind])
-                        if fit:
-                            noise, attack_iter, suc = self.attack_sg_det(
-                                im_blob,
-                                img0,
-                                dets,
-                                inds,
-                                remain_inds,
-                                last_info=self.ad_last_info,
-                                outputs_ori=output,
-                                attack_id=attack_id,
-                                attack_ind=attack_ind
-                            )
-                            self.attack_iou_thr = 0
-                            if suc:
-                                suc = 1
-                                print(
-                                    f'attack id: {attack_id}\tattack frame {self.frame_id_}: SUCCESS\tl2 distance: {(noise ** 2).sum().sqrt().item()}\titeration: {attack_iter}')
-                            else:
-                                suc = 2
-                                print(
-                                    f'attack id: {attack_id}\tattack frame {self.frame_id_}: FAIL\tl2 distance: {(noise ** 2).sum().sqrt().item()}\titeration: {attack_iter}')
+                ious = self.processIoUs(ious)
+                ious = ious + ious.T
+                target_ind = np.argmax(ious[attack_ind])
+                if ious[attack_ind][target_ind] >= self.attack_iou_thr:
+                    fit = self.CheckFit(dets, id_feature, [attack_id], [attack_ind])
+                    if fit:
+                        noise, attack_iter, suc = self.attack_sg_det(
+                            im_blob,
+                            img0,
+                            dets,
+                            inds,
+                            remain_inds,
+                            last_info=self.ad_last_info,
+                            outputs_ori=output,
+                            attack_id=attack_id,
+                            attack_ind=attack_ind
+                        )
+                        self.attack_iou_thr = 0
+                        if suc:
+                            suc = 1
+                            print(
+                                f'attack id: {attack_id}\tattack frame {self.frame_id_}: SUCCESS\tl2 distance: {(noise ** 2).sum().sqrt().item()}\titeration: {attack_iter}')
                         else:
-                            suc = 3
-                        if ious[attack_ind][target_ind] == 0:
-                            self.temp_i += 1
-                            if self.temp_i >= 10:
-                                self.attack_iou_thr = self.ATTACK_IOU_THR
-                        else:
-                            self.temp_i = 0
+                            suc = 2
+                            print(
+                                f'attack id: {attack_id}\tattack frame {self.frame_id_}: FAIL\tl2 distance: {(noise ** 2).sum().sqrt().item()}\titeration: {attack_iter}')
                     else:
-                        self.attack_iou_thr = self.ATTACK_IOU_THR
-                    break
+                        suc = 3
+                    if ious[attack_ind][target_ind] == 0:
+                        self.temp_i += 1
+                        if self.temp_i >= 10:
+                            self.attack_iou_thr = self.ATTACK_IOU_THR
+                    else:
+                        self.temp_i = 0
+                else:
+                    self.attack_iou_thr = self.ATTACK_IOU_THR
+                break
 
         if noise is not None:
             l2_dis = (noise ** 2).sum().sqrt().item()
@@ -3087,10 +3077,6 @@ class JDETracker(object):
         # import pdb; pdb.set_trace()
         dets_index = inds[0][remain_inds].tolist()
 
-        td = {}
-        td_ind = {}
-        dbg = False
-
         # vis
         '''
         for i in range(0, dets.shape[0]):
@@ -3133,12 +3119,6 @@ class JDETracker(object):
         for itracked, idet in matches:
             track = strack_pool[itracked]
             det = detections[idet]
-            if dbg:
-                td[track.track_id] = det.tlwh
-                td_ind[track.track_id] = dets_index[idet]
-                if track.track_id not in td_:
-                    td_[track.track_id] = [None for i in range(50)]
-                td_[track.track_id][self.frame_id] = (track.smooth_feat, det.smooth_feat)
             if track.state == TrackState.Tracked:
                 track.update(detections[idet], self.frame_id)
                 activated_starcks.append(track)
@@ -3156,12 +3136,6 @@ class JDETracker(object):
         for itracked, idet in matches:
             track = r_tracked_stracks[itracked]
             det = detections[idet]
-            if dbg:
-                td[track.track_id] = det.tlwh
-                td_ind[track.track_id] = dets_index[idet]
-                if track.track_id not in td_:
-                    td_[track.track_id] = [None for i in range(50)]
-                td_[track.track_id][self.frame_id] = (track.smooth_feat, det.smooth_feat)
             if track.state == TrackState.Tracked:
                 track.update(det, self.frame_id)
                 activated_starcks.append(track)
@@ -3181,13 +3155,6 @@ class JDETracker(object):
         dists = matching.iou_distance(unconfirmed, detections)
         matches, u_unconfirmed, u_detection = matching.linear_assignment(dists, thresh=0.7)
         for itracked, idet in matches:
-            if dbg:
-                td[unconfirmed[itracked].track_id] = detections[idet].tlwh
-                td_ind[unconfirmed[itracked].track_id] = dets_index[idet]
-                if unconfirmed[itracked].track_id not in td_:
-                    td_[unconfirmed[itracked].track_id] = [None for i in range(50)]
-                td_[unconfirmed[itracked].track_id][self.frame_id] = (
-                unconfirmed[itracked].smooth_feat, detections[idet].smooth_feat)
             unconfirmed[itracked].update(detections[idet], self.frame_id)
             activated_starcks.append(unconfirmed[itracked])
         for it in u_unconfirmed:
@@ -3220,29 +3187,6 @@ class JDETracker(object):
         self.tracked_stracks, self.lost_stracks = remove_duplicate_stracks(self.tracked_stracks, self.lost_stracks)
         # get scores of lost tracks
         output_stracks = [track for track in self.tracked_stracks if track.is_activated]
-
-        if dbg:
-            f_1 = []
-            f_2 = []
-            fi = 1
-            fj = 2
-
-            if self.frame_id == 25:
-                for i in range(20):
-                    if td_[fi][i] is None or td_[fj][i] is None:
-                        continue
-                    f_1.append(td_[fi][i][0] @ td_[fi][i][1])
-                    f_2.append(td_[fi][i][0] @ td_[fj][i][1])
-                f1 = sum(f_1) / len(f_1)
-                f2 = sum(f_2) / len(f_2)
-
-                sc = 0
-                for i in range(len(f_1)):
-                    if f_2[i] > f_1[i]:
-                        sc += 1
-                print(f'f1:{f1}, f2:{f2}, sc:{sc}, len:{len(f_1)}')
-                import pdb;
-                pdb.set_trace()
 
         logger.debug('===========Frame {}=========='.format(self.frame_id))
         logger.debug('Activated: {}'.format([track.track_id for track in activated_starcks]))
