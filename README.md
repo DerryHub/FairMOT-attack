@@ -1,3 +1,7 @@
+<script type="text/x-mathjax-config">   MathJax.Hub.Config({     tex2jax: {       inlineMath: [ ['$','$'], ["\\(","\\)"] ],       processEscapes: true     }   }); </script>
+
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML" type="text/javascript"></script>
+
 # TraSw for FairMOT
 
 * **A Single-Target Attack example (Attack ID: 19; Screener ID: 24):**
@@ -23,7 +27,7 @@ Benefiting from the development of Deep Neural Networks, Multi-Object Tracking (
 
 **Single-Target Attack Results on MOT challenge test set**
 
-| Dataset | Suc. Rate | Avg. Frames | Avg. $L_2$ Distance |
+| Dataset | Suc. Rate | Avg. Frames | Avg. $L_2$​ Distance |
 | :-----: | :-------: | :---------: | :-----------------: |
 | 2DMOT15 |  95.37%   |    4.67     |        3.55         |
 |  MOT17  |  96.35%   |    5.61     |        3.23         |
