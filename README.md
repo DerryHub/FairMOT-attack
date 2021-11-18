@@ -1,7 +1,3 @@
-<script type="text/x-mathjax-config">   MathJax.Hub.Config({     tex2jax: {       inlineMath: [ ['$','$'], ["\\(","\\)"] ],       processEscapes: true     }   }); </script>
-
-<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML" type="text/javascript"></script>
-
 # TraSw for FairMOT
 
 * **A Single-Target Attack example (Attack ID: 19; Screener ID: 24):**
@@ -27,19 +23,19 @@ Benefiting from the development of Deep Neural Networks, Multi-Object Tracking (
 
 **Single-Target Attack Results on MOT challenge test set**
 
-| Dataset | Suc. Rate | Avg. Frames | Avg. $L_2$​ Distance |
-| :-----: | :-------: | :---------: | :-----------------: |
-| 2DMOT15 |  95.37%   |    4.67     |        3.55         |
-|  MOT17  |  96.35%   |    5.61     |        3.23         |
-|  MOT20  |  98.89%   |    4.12     |        3.12         |
+| Dataset | Suc. Rate | Avg. Frames | Avg.  L<sub>2</sub> Distance |
+| :-----: | :-------: | :---------: | :--------------------------: |
+| 2DMOT15 |  95.37%   |    4.67     |             3.55             |
+|  MOT17  |  96.35%   |    5.61     |             3.23             |
+|  MOT20  |  98.89%   |    4.12     |             3.12             |
 
 **Multiple-Target Attack Results on MOT challenge test set**
 
-| Dataset | Suc. Rate | Avg.  Frames (Proportion) | Avg. $L_2$ Distance |
-| :-----: | :-------: | :-----------------------: | :-----------------: |
-| 2DMOT15 |  81.95%   |          35.06%           |        2.79         |
-|  MOT17  |  82.01%   |          38.85%           |        2.71         |
-|  MOT20  |  82.02%   |          54.35%           |        3.28         |
+| Dataset | Suc. Rate | Avg.  Frames (Proportion) | Avg. L<sub>2</sub> Distance |
+| :-----: | :-------: | :-----------------------: | :-------------------------: |
+| 2DMOT15 |  81.95%   |          35.06%           |            2.79             |
+|  MOT17  |  82.01%   |          38.85%           |            2.71             |
+|  MOT20  |  82.02%   |          54.35%           |            3.28             |
 
 ## Installation
 
