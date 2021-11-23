@@ -18,6 +18,7 @@ By perturbing only two frames in this example video, we can exchange the 19th ID
 **Related Works**
 
 * [TraSw for ByteTrack](https://github.com/DerryHub/ByteTrack-attack)
+* [TraSw for JDE](https://github.com/zhou0123/JDE-attack)
 
 ## Abstract
 
