@@ -409,6 +409,14 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
                             attack_id=attack_id,
                             track_id=sg_track_ids[attack_id]
                         )
+                    elif opt.method == 'hijack':
+                        _, output_stracks_att, adImg, noise, l2_dis, suc = trackers_dic[attack_id].update_attack_sg_hj(
+                            blob,
+                            img0,
+                            name=path.replace(root_r, ''),
+                            attack_id=attack_id,
+                            track_id=sg_track_ids[attack_id]
+                        )
                     elif opt.method == 'cl':
                         _, output_stracks_att, adImg, noise, l2_dis, suc = trackers_dic[attack_id].update_attack_sg_cl(
                             blob,
@@ -804,6 +812,7 @@ if __name__ == '__main__':
                       PETS09-S2L2
                       TUD-Crossing
                       Venice-1'''
+        seqs_str = '''PETS09-S2L2'''
         data_root = os.path.join(opt.data_dir, 'MOT15/images/test')
     elif opt.test_mot17:
         seqs_str = '''MOT17-01-SDP
@@ -839,7 +848,7 @@ if __name__ == '__main__':
                       ETH-Pedcross2
                       TUD-Stadtmitte'''
 
-        # seqs_str = '''PETS09-S2L1'''
+        seqs_str = '''PETS09-S2L1'''
         data_root = os.path.join(opt.data_dir, 'MOT15/images/train')
     elif opt.val_mot20:
         seqs_str = '''MOT20-01
