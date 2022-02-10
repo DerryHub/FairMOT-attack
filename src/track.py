@@ -499,6 +499,24 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
                 if l2_dis is not None:
                     l2_distance.append(l2_dis)
                     attack_frames += 1
+            elif opt.attack == 'multiple' and opt.method == 'det':
+                online_targets_ori, output_stracks_att, adImg, noise, l2_dis = tracker.update_attack_mt_det(
+                    blob,
+                    img0,
+                    name=path.replace(root_r, '')
+                )
+                if l2_dis is not None:
+                    l2_distance.append(l2_dis)
+                    attack_frames += 1
+            elif opt.attack == 'multiple' and opt.method == 'hijack':
+                online_targets_ori, output_stracks_att, adImg, noise, l2_dis = tracker.update_attack_mt_hj(
+                    blob,
+                    img0,
+                    name=path.replace(root_r, '')
+                )
+                if l2_dis is not None:
+                    l2_distance.append(l2_dis)
+                    attack_frames += 1
             else:
                 raise RuntimeError()
             imgPath = os.path.join(imgRoot, path.replace(root_r, ''))
