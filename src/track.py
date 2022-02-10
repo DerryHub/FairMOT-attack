@@ -342,7 +342,7 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
         blob = torch.from_numpy(img).cuda().unsqueeze(0)
 
         if opt.attack:
-            if opt.attack == 'single' and opt.attack_id == -1 and opt.method in ['ids', 'det', 'feat', 'cl']:
+            if opt.attack == 'single' and opt.attack_id == -1 and opt.method in ['ids', 'det', 'feat', 'cl', 'hijack']:
                 online_targets_ori = tracker.update(blob, img0, name=path.replace(root_r, ''), track_id=track_id)
                 dets = []
                 ids = []
@@ -667,6 +667,7 @@ def eval_seq(opt, dataloader, data_type, result_filename, gt_dict, save_dir=None
         total_attack_frame.append(attack_frames / frame_id)
         out_logger(f'The mean L2 distance: {sum(l2_distance) / len(l2_distance) if len(l2_distance) else None}')
         total_l2_dis.extend(l2_distance)
+    out_logger('@' * 50 + ' total summary ' + '@' * 50)
     out_logger(f'All effective ids is {all_effective_ids} | {len(all_effective_ids)}')
     global total_eff_ids
     global total_attack_ids
@@ -812,7 +813,7 @@ if __name__ == '__main__':
                       PETS09-S2L2
                       TUD-Crossing
                       Venice-1'''
-        seqs_str = '''PETS09-S2L2'''
+        # seqs_str = '''PETS09-S2L2'''
         data_root = os.path.join(opt.data_dir, 'MOT15/images/test')
     elif opt.test_mot17:
         seqs_str = '''MOT17-01-SDP

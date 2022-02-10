@@ -495,8 +495,6 @@ class JDETracker(object):
             i += 1
             loss = 0
 
-            loss -= mse(im_blob, im_blob_ori)
-
             hm_index_att_lst = [hm_index_att]
 
             loss -= ((outputs['hm'].view(-1)[hm_index_att_lst].sigmoid()) ** 2).mean()
@@ -522,7 +520,8 @@ class JDETracker(object):
                 im_blob,
                 img0,
                 dets,
-                attack_ind
+                attack_ind,
+                thr=0.9 if ad_bbox else 0
             )
             if suc:
                 break
@@ -559,17 +558,16 @@ class JDETracker(object):
             i += 1
             loss = 0
 
-            loss -= mse(im_blob, im_blob_ori)
+            hm_index_att_lst = [hm_index_att]
+            # for n_i in range(3):
+            #     for n_j in range(3):
+            #         hm_index_att_ = hm_index_att + (n_i - 1) * W + (n_j - 1)
+            #         hm_index_att_ = max(0, min(H * W - 1, hm_index_att_))
+            #         hm_index_att_lst.append(hm_index_att_)
 
-            hm_index_att_lst = []
-            for n_i in range(3):
-                for n_j in range(3):
-                    hm_index_att_ = hm_index_att + (n_i - 1) * W + (n_j - 1)
-                    hm_index_att_ = max(0, min(H * W - 1, hm_index_att_))
-                    hm_index_att_lst.append(hm_index_att_)
-
-            loss += ((outputs['hm'].view(-1)[hm_index_att_lst].sigmoid()) ** 2 *
-                     torch.log(1 - outputs['hm'].view(-1)[hm_index_att_lst].sigmoid())).mean()
+            loss -= ((outputs['hm'].view(-1)[hm_index_att_lst].sigmoid()) ** 2).mean()
+            # loss += ((outputs['hm'].view(-1)[hm_index_att_lst].sigmoid()) ** 2 *
+            #          torch.log(1 - outputs['hm'].view(-1)[hm_index_att_lst].sigmoid())).mean()
 
             loss.backward()
 
@@ -1254,7 +1252,7 @@ class JDETracker(object):
                     return noise, i, False
         return noise, i, True
 
-    def forwardFeatureSgDet(self, im_blob, img0, dets_, attack_ind):
+    def forwardFeatureSgDet(self, im_blob, img0, dets_, attack_ind, thr=0):
         width = img0.shape[1]
         height = img0.shape[0]
         inp_height = im_blob.shape[2]
@@ -1285,7 +1283,7 @@ class JDETracker(object):
         row_inds, col_inds = linear_sum_assignment(-ious)
 
         for i in range(len(row_inds)):
-            if row_inds[i] == attack_ind and ious[row_inds[i], col_inds[i]] > 0:
+            if row_inds[i] == attack_ind and ious[row_inds[i], col_inds[i]] > thr:
                 return output, False
 
         return output, True
