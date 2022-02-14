@@ -73,6 +73,8 @@ class MultipleEval:
             tracks_pair_dic[id] = dict((frame_id, -1) for frame_id in info['frames'])
 
         for frame_id, frame_info in origin_frame2id.items():
+            if frame_id not in attack_frame2id:
+                continue
             origin_bbox_info = [[id, bbox] for id, bbox in frame_info.items()]
             origin_bbox = np.array([info[1] for info in origin_bbox_info])
             origin_id = [info[0] for info in origin_bbox_info]
@@ -831,7 +833,7 @@ if __name__ == '__main__':
                       PETS09-S2L2
                       TUD-Crossing
                       Venice-1'''
-        # seqs_str = '''PETS09-S2L2'''
+        # seqs_str = '''ADL-Rundle-1'''
         data_root = os.path.join(opt.data_dir, 'MOT15/images/test')
     elif opt.test_mot17:
         seqs_str = '''MOT17-01-SDP
@@ -841,7 +843,6 @@ if __name__ == '__main__':
                       MOT17-08-SDP
                       MOT17-12-SDP
                       MOT17-14-SDP'''
-        # seqs_str = '''MOT17-03-SDP'''
         data_root = os.path.join(opt.data_dir, 'MOT17/images/test')
     elif opt.val_mot17:
         seqs_str = '''MOT17-02-SDP

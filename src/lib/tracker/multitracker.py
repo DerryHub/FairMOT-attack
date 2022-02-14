@@ -514,7 +514,7 @@ class JDETracker(object):
             grad = im_blob.grad
             grad /= (grad ** 2).sum().sqrt() + 1e-8
 
-            noise += grad
+            noise += grad * 2
 
             im_blob = torch.clip(im_blob_ori + noise, min=0, max=1).data
             outputs, suc, _ = self.forwardFeatureDet(
@@ -522,7 +522,8 @@ class JDETracker(object):
                 img0,
                 dets,
                 [attack_ind],
-                thr=0.9 if ad_bbox else 0
+                thr=1 if ad_bbox else 0,
+                vs=[track_v] if ad_bbox else []
             )
             if suc:
                 break
@@ -575,7 +576,7 @@ class JDETracker(object):
             grad = im_blob.grad
             grad /= (grad ** 2).sum().sqrt() + 1e-8
 
-            noise += grad
+            noise += grad * 2
 
             im_blob = torch.clip(im_blob_ori + noise, min=0, max=1).data
             outputs, suc, _ = self.forwardFeatureDet(
@@ -662,7 +663,7 @@ class JDETracker(object):
                 im_blob,
                 img0,
                 dets,
-                attack_inds,
+                attack_inds.tolist(),
                 thr=thrs
             )
 
@@ -729,7 +730,7 @@ class JDETracker(object):
                 im_blob,
                 img0,
                 dets,
-                attack_inds
+                attack_inds.tolist()
             )
 
             if fail_ids is not None:
@@ -1410,7 +1411,7 @@ class JDETracker(object):
                     return noise, i, False
         return noise, i, True
 
-    def forwardFeatureDet(self, im_blob, img0, dets_, attack_inds, thr=0):
+    def forwardFeatureDet(self, im_blob, img0, dets_, attack_inds, thr=0, vs=[]):
         width = img0.shape[1]
         height = img0.shape[0]
         inp_height = im_blob.shape[2]
@@ -1440,13 +1441,21 @@ class JDETracker(object):
                          np.ascontiguousarray(dets[:, :4], dtype=np.float))
         row_inds, col_inds = linear_sum_assignment(-ious)
 
-        attack_inds = attack_inds.tolist()
         if not isinstance(thr, list):
             thr = [thr for _ in range(len(attack_inds))]
         fail_n = 0
         for i in range(len(row_inds)):
-            if row_inds[i] in attack_inds and ious[row_inds[i], col_inds[i]] > thr[attack_inds.index(row_inds[i])]:
-                fail_n += 1
+            if row_inds[i] in attack_inds:
+                if ious[row_inds[i], col_inds[i]] > thr[attack_inds.index(row_inds[i])]:
+                    fail_n += 1
+                elif len(vs):
+                    d_o = dets_[row_inds[i], :4]
+                    d_a = dets[col_inds[i], :4]
+                    c_o = (d_o[[0, 1]] + d_o[[2, 3]]) / 2
+                    c_a = (d_a[[0, 1]] + d_a[[2, 3]]) / 2
+                    c_d = ((c_a - c_o) / 4).astype(np.int) * vs[0]
+                    if c_d[0] >= 0 or c_d[1] >= 0:
+                        fail_n += 1
         return output, fail_n == 0, fail_n
 
 
