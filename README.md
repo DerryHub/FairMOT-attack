@@ -18,29 +18,20 @@ By perturbing only two frames in this example video, we can exchange the 19th ID
 **Related Works**
 
 * [TraSw for ByteTrack](https://github.com/DerryHub/ByteTrack-attack)
-* [TraSw for JDE](https://github.com/zhou0123/JDE-attack)
 
 ## Abstract
 
-Benefiting from the development of Deep Neural Networks, Multi-Object Tracking (MOT) has achieved aggressive progress. Currently, the real-time Joint-Detection-Tracking (JDT) based MOT trackers gain increasing attention and derive many excellent models. However, the robustness of JDT trackers is rarely studied, and it is challenging to attack the MOT system since its mature association algorithms are designed to be robust against errors during tracking. In this work, we analyze the weakness of JDT trackers and propose a novel adversarial attack method, called Tracklet-Switch (TraSw), against the complete tracking pipeline of MOT. Specifically, a push-pull loss and a center leaping optimization are designed to generate adversarial examples for both re-ID feature and object detection. TraSw can fool the tracker to fail to track the targets in the subsequent frames by attacking very few frames. We evaluate our method on the advanced deep trackers (i.e., FairMOT, JDE, ByteTrack) using the MOT-Challenge datasets (i.e., 2DMOT15, MOT17, and MOT20). Experiments show that TraSw can achieve a high success rate of over 95% by attacking only five frames on average for the single-target attack and a reasonably high success rate of over 80% for the multiple-target attack.
+Multi-Object Tracking (MOT) has achieved aggressive progress and derives many excellent deep learning models. However, the robustness of the trackers is rarely studied, and it is challenging to attack the MOT system since its mature association algorithms are designed to be robust against errors during the tracking. In this work, we analyze the vulnerability of popular pedestrian MOT trackers and propose a novel adversarial attack method called Tracklet-Switch (TraSw) against the complete tracking pipeline of MOT. TraSw can fool the advanced deep trackers (i.e., FairMOT and ByteTrack) to fail to track the targets in the subsequent frames by attacking very few frames. Experiments on the MOT-Challenge datasets (i.e., 2DMOT15, MOT17, and MOT20) show that TraSw can achieve an extraordinarily high success rate of over 95% by attacking only four frames on average. To our knowledge, this is the first work on the adversarial attack against pedestrian MOT trackers. 
 
 ## Attack Performance
 
 **Single-Target Attack Results on MOT challenge test set**
 
-| Dataset | Suc. Rate | Avg. Frames | Avg.  L<sub>2</sub> Distance |
+| Dataset | Suc. Rate | Avg. Frames | Total L<sub>2</sub> Distance |
 | :-----: | :-------: | :---------: | :--------------------------: |
-| 2DMOT15 |  95.37%   |    4.67     |             3.55             |
-|  MOT17  |  96.35%   |    5.61     |             3.23             |
-|  MOT20  |  98.89%   |    4.12     |             3.12             |
-
-**Multiple-Target Attack Results on MOT challenge test set**
-
-| Dataset | Suc. Rate | Avg.  Frames (Proportion) | Avg. L<sub>2</sub> Distance |
-| :-----: | :-------: | :-----------------------: | :-------------------------: |
-| 2DMOT15 |  81.95%   |          35.06%           |            2.79             |
-|  MOT17  |  82.01%   |          38.85%           |            2.71             |
-|  MOT20  |  82.02%   |          54.35%           |            3.28             |
+| 2DMOT15 |  93.28%   |    4.25     |            13.99             |
+|  MOT17  |  91.03%   |    4.74     |            14.40             |
+|  MOT20  |  96.46%   |    3.94     |            11.67             |
 
 ## Installation
 
@@ -102,8 +93,6 @@ python track.py mot --test_mot20 True --load_model all_dla34.pth --conf_thres 0.
 
 ## Attack
 
-### Single-Target Attack
-
 * attack all attackable objects separately in videos in parallel (may require a lot of memory).
 
 ```shell
@@ -120,17 +109,6 @@ cd src
 python track.py mot --test_mot15 True --load_model all_dla34.pth --conf_thres 0.3 --data_dir ${DATA_DIR} --output_dir ${OUTPUT_DIR} --attack single --attack_id ${a specific id in origial tracklets}
 python track.py mot --test_mot17 True --load_model all_dla34.pth --conf_thres 0.4 --data_dir ${DATA_DIR} --output_dir ${OUTPUT_DIR} --attack single --attack_id ${a specific id in origial tracklets}
 python track.py mot --test_mot20 True --load_model all_dla34.pth --conf_thres 0.3 --data_dir ${DATA_DIR} --output_dir ${OUTPUT_DIR} --attack single --attack_id ${a specific id in origial tracklets}
-```
-
-### Multiple-Targets Attack
-
-* attack all attackable objects in videos.
-
-```shell
-cd src
-python track.py mot --test_mot15 True --load_model all_dla34.pth --conf_thres 0.3 --data_dir ${DATA_DIR} --output_dir ${OUTPUT_DIR} --attack multiple
-python track.py mot --test_mot17 True --load_model all_dla34.pth --conf_thres 0.4 --data_dir ${DATA_DIR} --output_dir ${OUTPUT_DIR} --attack multiple
-python track.py mot --test_mot20 True --load_model all_dla34.pth --conf_thres 0.3 --data_dir ${DATA_DIR} --output_dir ${OUTPUT_DIR} --attack multiple
 ```
 
 ## Acknowledgement
